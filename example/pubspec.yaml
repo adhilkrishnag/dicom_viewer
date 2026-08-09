@@ -1,0 +1,22 @@
+name: dicom_viewer_example
+description: Example application for the dicom_viewer package.
+publish_to: 'none'
+
+environment:
+  sdk: ">=3.7.0 <4.0.0"
+  flutter: ">=3.29.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  dicom_viewer:
+    path: ../
+  file_picker: ^8.1.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
