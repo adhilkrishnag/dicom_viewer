@@ -2,21 +2,19 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: ['main']
   pull_request:
-    branches: [ main ]
+    branches: ['main']
 
 jobs:
-  analyze-and-test:
-    name: Build, Analyze & Test
+  quality:
+    name: Quality Checks
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Flutter SDK
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           cache: true
@@ -24,14 +22,63 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Verify formatting
+      - name: Check formatting
         run: dart format --output=none --set-exit-if-changed .
 
-      - name: Static Analysis
+      - name: Analyze
         run: flutter analyze
 
-      - name: Run Unit & Widget Tests
+      - name: Run tests
         run: flutter test --coverage
 
-      - name: Validate pub.dev Package Readiness
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/lcov.info
+
+      - name: Validate package
         run: flutter pub publish --dry-run
+
+  build-platforms:
+    name: Build Example (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    needs: quality
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: web
+            os: ubuntu-latest
+            build-cmd: flutter build web
+
+          - platform: android
+            os: ubuntu-latest
+            build-cmd: flutter build apk --debug
+
+          - platform: windows
+            os: windows-latest
+            build-cmd: flutter build windows --debug
+
+          - platform: macos
+            os: macos-latest
+            build-cmd: flutter build macos --debug
+
+          - platform: ios
+            os: macos-latest
+            build-cmd: flutter build ios --debug --no-codesign
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Build Example App
+        working-directory: example
+        run: |
+          flutter pub get
+          ${{ matrix.build-cmd }}
