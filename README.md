@@ -21,6 +21,19 @@ A **pure-Dart, cross-platform DICOM viewer package for Flutter**. Parses single-
 - 🖐️ **Interactive UI Widget**: `DicomImageWidget` with touch/pan drag gestures for adjusting Window Center (brightness) and Window Width (contrast) in real time + medical text overlays.
 - 🛡️ **Graceful Error Handling**: Clear, descriptive `UnsupportedError` notifications for compressed transfer syntaxes (e.g. JPEG 2000, JPEG Lossless, RLE).
 
+### 📋 Supported in v0.1.0
+
+- ✅ **Explicit VR Little Endian** (`1.2.840.10008.1.2.1`)
+- ✅ **Implicit VR Little Endian** (`1.2.840.10008.1.2`)
+- ✅ **Explicit VR Big Endian** (`1.2.840.10008.1.2.2`)
+- ✅ **Uncompressed Pixel Data** (8-bit, 16-bit signed/unsigned, 32-bit)
+
+### ⛔ Planned for Future Releases (v0.2.0+)
+
+- ❌ Compressed Transfer Syntaxes (JPEG Baseline, JPEG Lossless, JPEG 2000, RLE Lossless) — throws clear `UnsupportedError`
+- ❌ Multi-frame DICOM scrolling
+- ❌ Measurement tools (distance, area, ROI statistics)
+
 ---
 
 ## 🚀 Getting Started
