@@ -184,7 +184,10 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                     const SizedBox(width: 6),
                     ActionChip(
                       avatar: const Icon(Icons.refresh, size: 14),
-                      label: const Text('Reset', style: TextStyle(fontSize: 12)),
+                      label: const Text(
+                        'Reset',
+                        style: TextStyle(fontSize: 12),
+                      ),
                       onPressed: _resetWindowing,
                     ),
                   ],
@@ -328,7 +331,13 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
     builder.add([0x44, 0x49, 0x43, 0x4D]);
 
     // Group 0002 Meta Header
-    _writeTag(builder, 0x0002, 0x0010, 'UI', '1.2.840.10008.1.2.1'); // Explicit VR Little Endian
+    _writeTag(
+      builder,
+      0x0002,
+      0x0010,
+      'UI',
+      '1.2.840.10008.1.2.1',
+    ); // Explicit VR Little Endian
 
     // Dataset Metadata
     _writeTag(builder, 0x0008, 0x0060, 'CS', 'CT');
@@ -341,7 +350,13 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
     _writeTag(builder, 0x0028, 0x0100, 'US', 16); // BitsAllocated
     _writeTag(builder, 0x0028, 0x0101, 'US', 16); // BitsStored
     _writeTag(builder, 0x0028, 0x0102, 'US', 15); // HighBit
-    _writeTag(builder, 0x0028, 0x0103, 'US', 1); // PixelRepresentation (Signed 2's complement)
+    _writeTag(
+      builder,
+      0x0028,
+      0x0103,
+      'US',
+      1,
+    ); // PixelRepresentation (Signed 2's complement)
     _writeTag(builder, 0x0028, 0x1050, 'DS', '40'); // WindowCenter
     _writeTag(builder, 0x0028, 0x1051, 'DS', '400'); // WindowWidth
     _writeTag(builder, 0x0028, 0x1052, 'DS', '-1024'); // RescaleIntercept
@@ -372,7 +387,8 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
         }
 
         final storedPixel = hu + 1024; // Reverse Rescale Intercept (-1024)
-        final ByteData bd = ByteData(2)..setInt16(0, storedPixel, Endian.little);
+        final ByteData bd = ByteData(2)
+          ..setInt16(0, storedPixel, Endian.little);
         pixelsBuilder.add(bd.buffer.asUint8List());
       }
     }
@@ -389,14 +405,27 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
     return builder.toBytes();
   }
 
-  void _writeTag(BytesBuilder bb, int group, int element, String vrStr, dynamic val) {
-    bb.add([group & 0xFF, (group >> 8) & 0xFF, element & 0xFF, (element >> 8) & 0xFF]);
+  void _writeTag(
+    BytesBuilder bb,
+    int group,
+    int element,
+    String vrStr,
+    dynamic val,
+  ) {
+    bb.add([
+      group & 0xFF,
+      (group >> 8) & 0xFF,
+      element & 0xFF,
+      (element >> 8) & 0xFF,
+    ]);
     final vrBytes = vrStr.codeUnits;
     bb.add(vrBytes);
 
     Uint8List valBytes;
     if (vrStr == 'US') {
-      valBytes = (ByteData(2)..setUint16(0, val as int, Endian.little)).buffer.asUint8List();
+      valBytes =
+          (ByteData(2)
+            ..setUint16(0, val as int, Endian.little)).buffer.asUint8List();
     } else {
       final strVal = val.toString();
       var b = strVal.codeUnits;
@@ -406,7 +435,11 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
       valBytes = Uint8List.fromList(b);
     }
 
-    if (vrStr == 'OB' || vrStr == 'OW' || vrStr == 'SQ' || vrStr == 'UN' || vrStr == 'UT') {
+    if (vrStr == 'OB' ||
+        vrStr == 'OW' ||
+        vrStr == 'SQ' ||
+        vrStr == 'UN' ||
+        vrStr == 'UT') {
       bb.add([0x00, 0x00]);
       final lenBd = ByteData(4)..setUint32(0, valBytes.length, Endian.little);
       bb.add(lenBd.buffer.asUint8List());

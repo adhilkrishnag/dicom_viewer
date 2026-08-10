@@ -95,6 +95,13 @@ class DicomTag implements Comparable<DicomTag> {
   static const DicomTag windowWidth = DicomTag(0x0028, 0x1051);
   static const DicomTag windowCenterWidthExplanation = DicomTag(0x0028, 0x1055);
 
+  // Sequences
+  static const DicomTag referencedStudySequence = DicomTag(0x0008, 0x1110);
+  static const DicomTag referencedSeriesSequence = DicomTag(0x0008, 0x1115);
+  static const DicomTag referencedImageSequence = DicomTag(0x0008, 0x1140);
+  static const DicomTag requestAttributesSequence = DicomTag(0x0040, 0x0275);
+  static const DicomTag contentSequence = DicomTag(0x0040, 0xA730);
+
   // Group 7FE0 - Pixel Data
   static const DicomTag pixelData = DicomTag(0x7FE0, 0x0010);
 }

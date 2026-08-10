@@ -78,29 +78,9 @@ class DicomRenderer {
     final tsDetails = TransferSyntaxDetails.fromUid(dataset.transferSyntaxUid);
 
     if (_isCompressed(rawPixelBytes, dataset.transferSyntaxUid)) {
-      // Check for JPEG 2000 specifically (SOC marker 0xFF4F or JP2 header 0x0000000C)
-      final isJpeg2000 =
-          (rawPixelBytes.length >= 2 &&
-              rawPixelBytes[0] == 0xFF &&
-              rawPixelBytes[1] == 0x4F) ||
-          (dataset.transferSyntaxUid == TransferSyntax.jpeg2000 ||
-              dataset.transferSyntaxUid == TransferSyntax.jpeg2000Lossless);
-
-      if (isJpeg2000) {
-        throw UnsupportedError(
-          'Unsupported Transfer Syntax: JPEG 2000 (${dataset.transferSyntaxUid}). v1 of dicom_viewer supports uncompressed DICOM files. Compressed pixel data is planned for v2.',
-        );
-      }
-
-      try {
-        final codec = await ui.instantiateImageCodec(rawPixelBytes);
-        final frame = await codec.getNextFrame();
-        return frame.image;
-      } catch (e) {
-        throw UnsupportedError(
-          'Unsupported Transfer Syntax: ${tsDetails.name} (${dataset.transferSyntaxUid}). v1 of dicom_viewer supports uncompressed DICOM files (Explicit & Implicit VR Little Endian). Compressed pixel data is planned for v2.',
-        );
-      }
+      throw UnsupportedError(
+        'Unsupported Transfer Syntax: ${tsDetails.name} (${dataset.transferSyntaxUid}). v1 of dicom_viewer supports uncompressed DICOM files (Explicit & Implicit VR Little Endian). Compressed pixel data is planned for v2.',
+      );
     }
 
     final rgbaBytes = renderToRgba(

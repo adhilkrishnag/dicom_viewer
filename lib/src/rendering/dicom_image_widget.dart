@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
@@ -46,6 +47,10 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
   bool _isLoading = true;
   String? _errorMessage;
 
+  int _renderGeneration = 0;
+  bool _isRendering = false;
+  bool _renderPending = false;
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +67,14 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     }
   }
 
+  @override
+  void dispose() {
+    _renderGeneration++;
+    _renderedImage?.dispose();
+    _renderedImage = null;
+    super.dispose();
+  }
+
   void _initWindowing() {
     _windowCenter =
         widget.initialWindowCenter ?? widget.dataset.windowCenter ?? 128.0;
@@ -72,10 +85,20 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
   }
 
   Future<void> _renderImage() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    if (_isRendering) {
+      _renderPending = true;
+      return;
+    }
+
+    _isRendering = true;
+    final currentGen = ++_renderGeneration;
+
+    if (mounted && _renderedImage == null) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
 
     try {
       final img = await DicomRenderer.renderToImage(
@@ -84,18 +107,28 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
         windowWidth: _windowWidth,
       );
 
-      if (mounted) {
+      if (mounted && currentGen == _renderGeneration) {
+        final oldImage = _renderedImage;
         setState(() {
           _renderedImage = img;
           _isLoading = false;
         });
+        oldImage?.dispose();
+      } else {
+        img.dispose();
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && currentGen == _renderGeneration) {
         setState(() {
           _errorMessage = e.toString();
           _isLoading = false;
         });
+      }
+    } finally {
+      _isRendering = false;
+      if (_renderPending && mounted) {
+        _renderPending = false;
+        unawaited(_renderImage());
       }
     }
   }
@@ -109,14 +142,14 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     });
 
     widget.onWindowChanged?.call(_windowCenter, _windowWidth);
-    _renderImage();
+    unawaited(_renderImage());
   }
 
   void resetWindowing() {
     setState(() {
       _initWindowing();
     });
-    _renderImage();
+    unawaited(_renderImage());
   }
 
   @override

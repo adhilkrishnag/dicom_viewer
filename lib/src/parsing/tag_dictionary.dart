@@ -245,6 +245,38 @@ class TagDictionary {
       keyword: 'WindowWidth',
     ),
 
+    // Sequence Tags
+    DicomTag.referencedStudySequence: const TagInfo(
+      tag: DicomTag.referencedStudySequence,
+      name: 'Referenced Study Sequence',
+      vr: ValueRepresentation.sq,
+      keyword: 'ReferencedStudySequence',
+    ),
+    DicomTag.referencedSeriesSequence: const TagInfo(
+      tag: DicomTag.referencedSeriesSequence,
+      name: 'Referenced Series Sequence',
+      vr: ValueRepresentation.sq,
+      keyword: 'ReferencedSeriesSequence',
+    ),
+    DicomTag.referencedImageSequence: const TagInfo(
+      tag: DicomTag.referencedImageSequence,
+      name: 'Referenced Image Sequence',
+      vr: ValueRepresentation.sq,
+      keyword: 'ReferencedImageSequence',
+    ),
+    DicomTag.requestAttributesSequence: const TagInfo(
+      tag: DicomTag.requestAttributesSequence,
+      name: 'Request Attributes Sequence',
+      vr: ValueRepresentation.sq,
+      keyword: 'RequestAttributesSequence',
+    ),
+    DicomTag.contentSequence: const TagInfo(
+      tag: DicomTag.contentSequence,
+      name: 'Content Sequence',
+      vr: ValueRepresentation.sq,
+      keyword: 'ContentSequence',
+    ),
+
     // Group 7FE0 Pixel Data
     DicomTag.pixelData: const TagInfo(
       tag: DicomTag.pixelData,

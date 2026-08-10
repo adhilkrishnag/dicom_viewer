@@ -65,7 +65,7 @@ class MedicalViewerScreen extends StatelessWidget {
         child: DicomImageWidget(
           dataset: dataset,
           showOverlay: true,
-          onWindowingChanged: (windowCenter, windowWidth) {
+          onWindowChanged: (windowCenter, windowWidth) {
             print('New Windowing: WC=$windowCenter, WW=$windowWidth');
           },
         ),
@@ -131,9 +131,15 @@ print('Window Center / Width: ${dataset.windowCenter} / ${dataset.windowWidth}')
 ## 🗺️ Roadmap
 
 - [x] **v0.1.0** — Uncompressed single-frame DICOM parsing, linear VOI windowing math, `ui.Image` renderer, interactive `DicomImageWidget`, cross-platform support.
-- [ ] **v0.2.0** — Native Dart decompressors for JPEG 2000 (`1.2.840.10008.1.2.4.90`/`.91`) and RLE Lossless (`1.2.840.10008.1.2.5`).
+- [ ] **v0.2.0** — Native Dart decompressors for JPEG 2000 (`1.2.840.10008.1.2.4.90`/`.91`) and RLE Lossless (`1.2.840.10008.1.2.5`), Pixel Padding Value support.
 - [ ] **v0.3.0** — Multi-frame DICOM support & slice index scrolling control.
 - [ ] **v0.4.0** — Measurement tools (Distance in mm, Area, Hounsfield Unit ROI statistics).
+
+---
+
+## ⚠️ Disclaimer
+
+This package is an open-source software library intended for image processing, visualization, and application development. It is **not** certified as a medical device by any regulatory authority (such as FDA or CE) and is **not** intended for primary clinical diagnosis or medical treatment.
 
 ---
 

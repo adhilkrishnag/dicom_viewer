@@ -71,5 +71,69 @@ void main() {
         );
       },
     );
+
+    test(
+      'DicomRenderer throws UnsupportedError on JPEG Baseline (1.2.840.10008.1.2.4.50) without falling through to native codec',
+      () async {
+        final dummyJpegBytes = Uint8List.fromList([
+          0xFF,
+          0xD8, // SOI
+          0xFF,
+          0xE0,
+          0x00,
+          0x10,
+          0x4A,
+          0x46,
+          0x49,
+          0x46,
+          0x00,
+        ]);
+
+        final bytes = SyntheticDicomGenerator.create(
+          width: 16,
+          height: 16,
+          transferSyntaxUid: TransferSyntax.jpegBaseline,
+          rawEncapsulatedBytes: dummyJpegBytes,
+        );
+
+        final dataset = DicomDataset.fromBytes(bytes);
+
+        expect(
+          () => DicomRenderer.renderToRgba(dataset),
+          throwsA(isA<UnsupportedError>()),
+        );
+
+        expect(
+          () async => await DicomRenderer.renderToImage(dataset),
+          throwsA(isA<UnsupportedError>()),
+        );
+      },
+    );
+
+    test(
+      'DicomRenderer throws UnsupportedError on RLE Lossless (1.2.840.10008.1.2.5)',
+      () async {
+        final dummyRleBytes = Uint8List.fromList([0x01, 0x00, 0x00, 0x00]);
+
+        final bytes = SyntheticDicomGenerator.create(
+          width: 16,
+          height: 16,
+          transferSyntaxUid: TransferSyntax.rleLossless,
+          rawEncapsulatedBytes: dummyRleBytes,
+        );
+
+        final dataset = DicomDataset.fromBytes(bytes);
+
+        expect(
+          () => DicomRenderer.renderToRgba(dataset),
+          throwsA(isA<UnsupportedError>()),
+        );
+
+        expect(
+          () async => await DicomRenderer.renderToImage(dataset),
+          throwsA(isA<UnsupportedError>()),
+        );
+      },
+    );
   });
 }

@@ -188,8 +188,17 @@ class DicomParser {
             ),
           );
           continue;
-        } else if (vr == ValueRepresentation.sq) {
-          // Undefined length Sequence: scan forward until Sequence Delimitation (FFFE, E0DD)
+        } else if (vr == ValueRepresentation.sq ||
+            !currentExplicitVR ||
+            vr == ValueRepresentation.un ||
+            vr == ValueRepresentation.unknown) {
+          // Undefined length Sequence or Implicit VR element: scan forward until Sequence Delimitation (FFFE, E0DD).
+          // Per DICOM PS3.5 §7.1.2, in Implicit VR, only SQ elements can have undefined length (0xFFFFFFFF).
+          final effectiveVR =
+              (vr == ValueRepresentation.un ||
+                      vr == ValueRepresentation.unknown)
+                  ? ValueRepresentation.sq
+                  : vr;
           int depth = 1;
           final sqStartOffset = offset;
           while (offset + 8 <= bytes.length) {
@@ -222,7 +231,7 @@ class DicomParser {
           elements.add(
             DicomDataElement(
               tag: tag,
-              vr: vr,
+              vr: effectiveVR,
               valueLength: sqData.length,
               valueBytes: sqData,
               isLittleEndian: currentLittleEndian,
