@@ -160,6 +160,12 @@ class TagDictionary {
     ),
 
     // Group 0028 Image Pixel
+    DicomTag.numberOfFrames: const TagInfo(
+      tag: DicomTag.numberOfFrames,
+      name: 'Number of Frames',
+      vr: ValueRepresentation.isVR,
+      keyword: 'NumberOfFrames',
+    ),
     DicomTag.samplesPerPixel: const TagInfo(
       tag: DicomTag.samplesPerPixel,
       name: 'Samples per Pixel',
@@ -213,6 +219,18 @@ class TagDictionary {
       name: 'Pixel Representation',
       vr: ValueRepresentation.us,
       keyword: 'PixelRepresentation',
+    ),
+    DicomTag.pixelPaddingValue: const TagInfo(
+      tag: DicomTag.pixelPaddingValue,
+      name: 'Pixel Padding Value',
+      vr: ValueRepresentation.ss,
+      keyword: 'PixelPaddingValue',
+    ),
+    DicomTag.pixelPaddingRangeLimit: const TagInfo(
+      tag: DicomTag.pixelPaddingRangeLimit,
+      name: 'Pixel Padding Range Limit',
+      vr: ValueRepresentation.ss,
+      keyword: 'PixelPaddingRangeLimit',
     ),
     DicomTag.rescaleIntercept: const TagInfo(
       tag: DicomTag.rescaleIntercept,

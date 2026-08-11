@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import '../decoders/rle_decoder.dart';
 import '../parsing/dicom_dataset.dart';
 import '../parsing/transfer_syntax.dart';
 import '../pixel_data/pixel_data_decoder.dart';
@@ -29,9 +30,57 @@ class DicomRenderer {
     return details.isEncapsulated;
   }
 
-  /// Processes a [DicomDataset] into a 32-bit RGBA pixel byte array [Uint8List].
+  /// Extracts frame payload bytes from DICOM encapsulated Pixel Data (7FE0,0010).
+  static Uint8List extractEncapsulatedFrame(
+    Uint8List pixelBytes, {
+    int frameIndex = 0,
+  }) {
+    if (pixelBytes.length < 8) return pixelBytes;
+
+    final bd = ByteData.sublistView(pixelBytes);
+    final group = bd.getUint16(0, Endian.little);
+    final elem = bd.getUint16(2, Endian.little);
+
+    if (group != 0xFFFE || elem != 0xE000) {
+      return pixelBytes;
+    }
+
+    int offset = 0;
+    int currentFrame = 0;
+
+    while (offset + 8 <= pixelBytes.length) {
+      final g = bd.getUint16(offset, Endian.little);
+      final e = bd.getUint16(offset + 2, Endian.little);
+      final itemLen = bd.getUint32(offset + 4, Endian.little);
+      offset += 8;
+
+      if (g == 0xFFFE && e == 0xE000) {
+        if (offset == 8) {
+          // Basic Offset Table (BOT) - skip
+          offset += itemLen;
+          continue;
+        }
+
+        if (currentFrame == frameIndex) {
+          final end = (offset + itemLen).clamp(offset, pixelBytes.length);
+          return pixelBytes.sublist(offset, end);
+        }
+        currentFrame++;
+        offset += itemLen;
+      } else if (g == 0xFFFE && e == 0xE0DD) {
+        break;
+      } else {
+        offset += 2;
+      }
+    }
+
+    return pixelBytes;
+  }
+
+  /// Processes a [DicomDataset] frame into a 32-bit RGBA pixel byte array [Uint8List].
   static Uint8List renderToRgba(
     DicomDataset dataset, {
+    int frameIndex = 0,
     double? windowCenter,
     double? windowWidth,
   }) {
@@ -40,16 +89,62 @@ class DicomRenderer {
       throw StateError('DICOM Dataset contains no Pixel Data (7FE0,0010).');
     }
 
-    final tsDetails = TransferSyntaxDetails.fromUid(dataset.transferSyntaxUid);
-    if (_isCompressed(rawPixelBytes, dataset.transferSyntaxUid)) {
-      throw UnsupportedError(
-        'Unsupported Transfer Syntax: ${tsDetails.name} (${dataset.transferSyntaxUid}). v1 of dicom_viewer supports uncompressed DICOM files (Explicit & Implicit VR Little Endian). Compressed pixel data is planned for v2.',
+    final totalFrames = dataset.numberOfFrames;
+    if (frameIndex < 0 || (totalFrames > 0 && frameIndex >= totalFrames)) {
+      throw RangeError(
+        'Invalid frameIndex $frameIndex (total frames: $totalFrames).',
       );
+    }
+
+    final tsUid = dataset.transferSyntaxUid;
+    final tsDetails = TransferSyntaxDetails.fromUid(tsUid);
+
+    Uint8List effectivePixelBytes;
+
+    if (tsUid == TransferSyntax.rleLossless) {
+      final framePayload = extractEncapsulatedFrame(
+        rawPixelBytes,
+        frameIndex: frameIndex,
+      );
+      effectivePixelBytes = RleDecoder.decodeFrame(
+        rleFrameBytes: framePayload,
+        width: dataset.columns,
+        height: dataset.rows,
+        bitsAllocated: dataset.bitsAllocated,
+        samplesPerPixel: dataset.samplesPerPixel,
+      );
+    } else if (_isCompressed(rawPixelBytes, tsUid)) {
+      throw UnsupportedError(
+        'Unsupported Transfer Syntax: ${tsDetails.name} ($tsUid). v0.2.0 supports uncompressed and RLE Lossless DICOM files.',
+      );
+    } else {
+      // Uncompressed frame offset calculation:
+      // BytesPerFrame = Rows * Columns * SamplesPerPixel * ceil(BitsAllocated / 8)
+      final bytesPerSample = (dataset.bitsAllocated + 7) ~/ 8;
+      final bytesPerFrame =
+          dataset.rows *
+          dataset.columns *
+          dataset.samplesPerPixel *
+          bytesPerSample;
+      final frameStart = frameIndex * bytesPerFrame;
+      if (frameStart >= rawPixelBytes.length && totalFrames > 1) {
+        throw FormatException(
+          'Frame $frameIndex start offset $frameStart exceeds pixel data length (${rawPixelBytes.length} bytes).',
+        );
+      }
+      final frameEnd = (frameStart + bytesPerFrame).clamp(
+        frameStart,
+        rawPixelBytes.length,
+      );
+      effectivePixelBytes =
+          (bytesPerFrame > 0 && frameStart < rawPixelBytes.length)
+              ? rawPixelBytes.sublist(frameStart, frameEnd)
+              : rawPixelBytes;
     }
 
     final info = PixelDataInfo.fromDataset(dataset);
     const decoder = PixelDataDecoder();
-    final rawPixels = decoder.decode(rawPixelBytes, info);
+    final rawPixels = decoder.decode(effectivePixelBytes, info);
 
     final wc = windowCenter ?? dataset.windowCenter;
     final ww = windowWidth ?? dataset.windowWidth;
@@ -64,9 +159,10 @@ class DicomRenderer {
     );
   }
 
-  /// Converts a [DicomDataset] into a displayable Flutter [ui.Image].
+  /// Converts a [DicomDataset] frame into a displayable Flutter [ui.Image].
   static Future<ui.Image> renderToImage(
     DicomDataset dataset, {
+    int frameIndex = 0,
     double? windowCenter,
     double? windowWidth,
   }) async {
@@ -75,16 +171,19 @@ class DicomRenderer {
       throw StateError('DICOM Dataset contains no Pixel Data (7FE0,0010).');
     }
 
-    final tsDetails = TransferSyntaxDetails.fromUid(dataset.transferSyntaxUid);
+    final tsUid = dataset.transferSyntaxUid;
+    final tsDetails = TransferSyntaxDetails.fromUid(tsUid);
 
-    if (_isCompressed(rawPixelBytes, dataset.transferSyntaxUid)) {
+    if (tsUid != TransferSyntax.rleLossless &&
+        _isCompressed(rawPixelBytes, tsUid)) {
       throw UnsupportedError(
-        'Unsupported Transfer Syntax: ${tsDetails.name} (${dataset.transferSyntaxUid}). v1 of dicom_viewer supports uncompressed DICOM files (Explicit & Implicit VR Little Endian). Compressed pixel data is planned for v2.',
+        'Unsupported Transfer Syntax: ${tsDetails.name} ($tsUid). v0.2.0 supports uncompressed and RLE Lossless DICOM files.',
       );
     }
 
     final rgbaBytes = renderToRgba(
       dataset,
+      frameIndex: frameIndex,
       windowCenter: windowCenter,
       windowWidth: windowWidth,
     );

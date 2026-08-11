@@ -49,6 +49,7 @@ class DicomDataset {
 
   // --- Image Pixel Attributes ---
 
+  int get numberOfFrames => getInt(DicomTag.numberOfFrames) ?? 1;
   int get rows => getInt(DicomTag.rows) ?? 0;
   int get columns => getInt(DicomTag.columns) ?? 0;
   int get samplesPerPixel => getInt(DicomTag.samplesPerPixel) ?? 1;
@@ -57,6 +58,9 @@ class DicomDataset {
   int get highBit => getInt(DicomTag.highBit) ?? (bitsStored - 1);
 
   int get planarConfiguration => getInt(DicomTag.planarConfiguration) ?? 0;
+
+  int? get pixelPaddingValue => getInt(DicomTag.pixelPaddingValue);
+  int? get pixelPaddingRangeLimit => getInt(DicomTag.pixelPaddingRangeLimit);
 
   bool get isLittleEndian {
     final pixelElem = getElement(DicomTag.pixelData);
@@ -85,6 +89,18 @@ class DicomDataset {
   double? get windowWidth {
     final elem = getElement(DicomTag.windowWidth);
     return elem?.asDouble;
+  }
+
+  /// List of multi-valued Window Center clinical presets (e.g. Brain, Bone).
+  List<double> get windowCenterPresets {
+    final elem = getElement(DicomTag.windowCenter);
+    return elem?.asDoubleList ?? const [];
+  }
+
+  /// List of multi-valued Window Width clinical presets (e.g. Brain, Bone).
+  List<double> get windowWidthPresets {
+    final elem = getElement(DicomTag.windowWidth);
+    return elem?.asDoubleList ?? const [];
   }
 
   /// Raw pixel data bytes.

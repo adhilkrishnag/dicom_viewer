@@ -16,6 +16,9 @@ class SyntheticDicomGenerator {
     double rescaleIntercept = -1024.0,
     double windowCenter = 40.0,
     double windowWidth = 400.0,
+    String? windowCenterString,
+    String? windowWidthString,
+    int? numberOfFrames,
     String patientName = 'TEST^PATIENT',
     String modality = 'CT',
     String transferSyntaxUid = '1.2.840.10008.1.2.1',
@@ -80,6 +83,9 @@ class SyntheticDicomGenerator {
     writeString(0x0010, 0x0010, 'PN', patientName);
 
     // Group 0028 Image Pixel Module
+    if (numberOfFrames != null) {
+      writeString(0x0028, 0x0008, 'IS', numberOfFrames.toString());
+    }
     writeUint16(0x0028, 0x0002, samplesPerPixel);
     writeString(0x0028, 0x0004, 'CS', photometricInterpretation);
     if (samplesPerPixel > 1) {
@@ -94,8 +100,18 @@ class SyntheticDicomGenerator {
 
     writeString(0x0028, 0x1052, 'DS', rescaleIntercept.toString());
     writeString(0x0028, 0x1053, 'DS', rescaleSlope.toString());
-    writeString(0x0028, 0x1050, 'DS', windowCenter.toString());
-    writeString(0x0028, 0x1051, 'DS', windowWidth.toString());
+    writeString(
+      0x0028,
+      0x1050,
+      'DS',
+      windowCenterString ?? windowCenter.toString(),
+    );
+    writeString(
+      0x0028,
+      0x1051,
+      'DS',
+      windowWidthString ?? windowWidth.toString(),
+    );
 
     // Group 7FE0 Pixel Data
     if (rawEncapsulatedBytes != null) {

@@ -11,15 +11,21 @@ class DicomImageWidget extends StatefulWidget {
   const DicomImageWidget({
     super.key,
     required this.dataset,
+    this.frameIndex = 0,
     this.initialWindowCenter,
     this.initialWindowWidth,
     this.showOverlay = true,
     this.sensitivity = 2.0,
+    this.enableZoom = false,
     this.onWindowChanged,
+    this.onViewChanged,
   });
 
   /// The parsed DICOM dataset to display.
   final DicomDataset dataset;
+
+  /// Multi-frame image index (0-indexed, default 0).
+  final int frameIndex;
 
   /// Optional initial Window Center override.
   final double? initialWindowCenter;
@@ -33,8 +39,14 @@ class DicomImageWidget extends StatefulWidget {
   /// Drag gesture windowing sensitivity multiplier.
   final double sensitivity;
 
+  /// Whether to enable interactive pan & zoom gestures.
+  final bool enableZoom;
+
   /// Callback emitted when windowing parameters change.
   final void Function(double center, double width)? onWindowChanged;
+
+  /// Callback emitted when view scale/pan offset changes.
+  final void Function(double scale, Offset offset)? onViewChanged;
 
   @override
   State<DicomImageWidget> createState() => _DicomImageWidgetState();
@@ -51,9 +63,13 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
   bool _isRendering = false;
   bool _renderPending = false;
 
+  late TransformationController _transformationController;
+
   @override
   void initState() {
     super.initState();
+    _transformationController = TransformationController();
+    _transformationController.addListener(_onTransformationChanged);
     _initWindowing();
     _renderImage();
   }
@@ -61,7 +77,8 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
   @override
   void didUpdateWidget(DicomImageWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.dataset != widget.dataset) {
+    if (oldWidget.dataset != widget.dataset ||
+        oldWidget.frameIndex != widget.frameIndex) {
       _initWindowing();
       _renderImage();
     }
@@ -69,10 +86,19 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
 
   @override
   void dispose() {
+    _transformationController.removeListener(_onTransformationChanged);
+    _transformationController.dispose();
     _renderGeneration++;
     _renderedImage?.dispose();
     _renderedImage = null;
     super.dispose();
+  }
+
+  void _onTransformationChanged() {
+    final matrix = _transformationController.value;
+    final scale = matrix.getMaxScaleOnAxis();
+    final translation = Offset(matrix.storage[12], matrix.storage[13]);
+    widget.onViewChanged?.call(scale, translation);
   }
 
   void _initWindowing() {
@@ -103,6 +129,7 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     try {
       final img = await DicomRenderer.renderToImage(
         widget.dataset,
+        frameIndex: widget.frameIndex,
         windowCenter: _windowCenter,
         windowWidth: _windowWidth,
       );
@@ -148,31 +175,59 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
   void resetWindowing() {
     setState(() {
       _initWindowing();
+      _transformationController.value = Matrix4.identity();
     });
     unawaited(_renderImage());
   }
 
+  int _lastTapTime = 0;
+
+  void _onTapDown(TapDownDetails details) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastTapTime < 300) {
+      resetWindowing();
+      _lastTapTime = 0;
+    } else {
+      _lastTapTime = now;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    Widget imageContent = Center(
+      child:
+          _renderedImage != null
+              ? RawImage(
+                image: _renderedImage,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.medium,
+              )
+              : Container(),
+    );
+
+    if (widget.enableZoom) {
+      imageContent = InteractiveViewer(
+        transformationController: _transformationController,
+        panEnabled: false,
+        scaleEnabled: true,
+        minScale: 0.5,
+        maxScale: 5.0,
+        child: imageContent,
+      );
+    }
+
     return Container(
       color: Colors.black,
       child: Stack(
         children: [
-          // Image canvas with windowing drag gesture
+          // Image canvas with windowing drag gesture and double-tap reset
           Positioned.fill(
             child: GestureDetector(
+              key: const Key('dicom_windowing_gesture'),
               onPanUpdate: _onPanUpdate,
+              onTapDown: _onTapDown,
               behavior: HitTestBehavior.opaque,
-              child: Center(
-                child:
-                    _renderedImage != null
-                        ? RawImage(
-                          image: _renderedImage,
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.medium,
-                        )
-                        : Container(),
-              ),
+              child: imageContent,
             ),
           ),
 

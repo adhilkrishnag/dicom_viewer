@@ -75,6 +75,7 @@ class DicomTag implements Comparable<DicomTag> {
   static const DicomTag instanceNumber = DicomTag(0x0020, 0x0013);
 
   // Group 0028 - Image Pixel Module
+  static const DicomTag numberOfFrames = DicomTag(0x0028, 0x0008);
   static const DicomTag samplesPerPixel = DicomTag(0x0028, 0x0002);
   static const DicomTag photometricInterpretation = DicomTag(0x0028, 0x0004);
   static const DicomTag planarConfiguration = DicomTag(0x0028, 0x0006);
@@ -84,6 +85,8 @@ class DicomTag implements Comparable<DicomTag> {
   static const DicomTag bitsStored = DicomTag(0x0028, 0x0101);
   static const DicomTag highBit = DicomTag(0x0028, 0x0102);
   static const DicomTag pixelRepresentation = DicomTag(0x0028, 0x0103);
+  static const DicomTag pixelPaddingValue = DicomTag(0x0028, 0x0120);
+  static const DicomTag pixelPaddingRangeLimit = DicomTag(0x0028, 0x0121);
   static const DicomTag smallestImagePixelValue = DicomTag(0x0028, 0x0106);
   static const DicomTag largestImagePixelValue = DicomTag(0x0028, 0x0107);
 

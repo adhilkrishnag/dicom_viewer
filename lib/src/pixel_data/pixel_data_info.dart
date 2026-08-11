@@ -13,6 +13,8 @@ class PixelDataInfo {
     required this.photometricInterpretation,
     this.isLittleEndian = true,
     this.planarConfiguration = 0,
+    this.pixelPaddingValue,
+    this.pixelPaddingRangeLimit,
   });
 
   factory PixelDataInfo.fromDataset(DicomDataset dataset) {
@@ -27,6 +29,8 @@ class PixelDataInfo {
       photometricInterpretation: dataset.photometricInterpretation,
       isLittleEndian: dataset.isLittleEndian,
       planarConfiguration: dataset.planarConfiguration,
+      pixelPaddingValue: dataset.pixelPaddingValue,
+      pixelPaddingRangeLimit: dataset.pixelPaddingRangeLimit,
     );
   }
 
@@ -40,6 +44,8 @@ class PixelDataInfo {
   final String photometricInterpretation;
   final bool isLittleEndian;
   final int planarConfiguration;
+  final int? pixelPaddingValue;
+  final int? pixelPaddingRangeLimit;
 
   int get totalPixels => rows * columns;
 }

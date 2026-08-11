@@ -111,15 +111,15 @@ void main() {
     );
 
     test(
-      'DicomRenderer throws UnsupportedError on RLE Lossless (1.2.840.10008.1.2.5)',
+      'DicomRenderer throws UnsupportedError on JPEG 2000 Lossless (1.2.840.10008.1.2.4.90)',
       () async {
-        final dummyRleBytes = Uint8List.fromList([0x01, 0x00, 0x00, 0x00]);
+        final dummyJ2kBytes = Uint8List.fromList([0xFF, 0x4F, 0xFF, 0x51]);
 
         final bytes = SyntheticDicomGenerator.create(
           width: 16,
           height: 16,
-          transferSyntaxUid: TransferSyntax.rleLossless,
-          rawEncapsulatedBytes: dummyRleBytes,
+          transferSyntaxUid: '1.2.840.10008.1.2.4.90',
+          rawEncapsulatedBytes: dummyJ2kBytes,
         );
 
         final dataset = DicomDataset.fromBytes(bytes);

@@ -34,8 +34,16 @@ class Windowing {
     }
   }
 
-  /// Calculates default Window Center & Window Width from a list of rescaled pixel values if missing in DICOM header.
-  static Map<String, double> calculateAutoWindow(List<double> rescaledValues) {
+  /// Calculates default Window Center & Window Width from a list of rescaled pixel values,
+  /// excluding optional DICOM Pixel Padding Values (0028,0120 / 0028,0121).
+  static Map<String, double> calculateAutoWindow(
+    List<double> rescaledValues, {
+    List<int>? rawPixels,
+    double rescaleSlope = 1.0,
+    double rescaleIntercept = 0.0,
+    int? pixelPaddingValue,
+    int? pixelPaddingRangeLimit,
+  }) {
     if (rescaledValues.isEmpty) {
       return {'center': 128.0, 'width': 256.0};
     }
@@ -43,9 +51,39 @@ class Windowing {
     double minVal = double.infinity;
     double maxVal = -double.infinity;
 
-    for (final v in rescaledValues) {
+    final hasPadding = pixelPaddingValue != null && rawPixels != null;
+    final padMin =
+        hasPadding
+            ? (pixelPaddingRangeLimit != null
+                ? math.min(pixelPaddingValue, pixelPaddingRangeLimit)
+                : pixelPaddingValue)
+            : null;
+    final padMax =
+        hasPadding
+            ? (pixelPaddingRangeLimit != null
+                ? math.max(pixelPaddingValue, pixelPaddingRangeLimit)
+                : pixelPaddingValue)
+            : null;
+
+    for (int i = 0; i < rescaledValues.length; i++) {
+      if (hasPadding && i < rawPixels.length) {
+        final raw = rawPixels[i];
+        if (raw >= padMin! && raw <= padMax!) {
+          continue; // Skip padding pixels
+        }
+      }
+
+      final v = rescaledValues[i];
       if (v < minVal) minVal = v;
       if (v > maxVal) maxVal = v;
+    }
+
+    if (minVal == double.infinity || maxVal == -double.infinity) {
+      // All pixels were padding or empty
+      for (final v in rescaledValues) {
+        if (v < minVal) minVal = v;
+        if (v > maxVal) maxVal = v;
+      }
     }
 
     if (minVal == maxVal) {
@@ -89,7 +127,14 @@ class Windowing {
       double ww = windowWidth ?? 0.0;
 
       if (windowCenter == null || windowWidth == null || windowWidth <= 0) {
-        final auto = calculateAutoWindow(rescaledValues);
+        final auto = calculateAutoWindow(
+          rescaledValues,
+          rawPixels: rawPixels,
+          rescaleSlope: rescaleSlope,
+          rescaleIntercept: rescaleIntercept,
+          pixelPaddingValue: info.pixelPaddingValue,
+          pixelPaddingRangeLimit: info.pixelPaddingRangeLimit,
+        );
         wc = windowCenter ?? auto['center']!;
         ww =
             (windowWidth != null && windowWidth > 0)
