@@ -5,6 +5,15 @@ import 'package:flutter/material.dart';
 import '../parsing/dicom_dataset.dart';
 import 'dicom_renderer.dart';
 
+/// Gesture tool mode when [DicomImageWidget.enableZoom] is enabled.
+enum DicomTool {
+  /// Drag gestures pan the image viewport inside InteractiveViewer.
+  pan,
+
+  /// Drag gestures adjust Window Center (brightness) and Window Width (contrast).
+  windowing,
+}
+
 /// Interactive Flutter widget that renders a DICOM image and provides real-time
 /// windowing (contrast/brightness) drag gestures.
 class DicomImageWidget extends StatefulWidget {
@@ -17,6 +26,7 @@ class DicomImageWidget extends StatefulWidget {
     this.showOverlay = true,
     this.sensitivity = 2.0,
     this.enableZoom = false,
+    this.tool = DicomTool.pan,
     this.onWindowChanged,
     this.onViewChanged,
   });
@@ -41,6 +51,9 @@ class DicomImageWidget extends StatefulWidget {
 
   /// Whether to enable interactive pan & zoom gestures.
   final bool enableZoom;
+
+  /// Active interaction tool when [enableZoom] is true. Defaults to [DicomTool.pan].
+  final DicomTool tool;
 
   /// Callback emitted when windowing parameters change.
   final void Function(double center, double width)? onWindowChanged;
@@ -206,25 +219,37 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     );
 
     if (widget.enableZoom) {
-      imageContent = InteractiveViewer(
-        transformationController: _transformationController,
-        panEnabled: false,
-        scaleEnabled: true,
-        minScale: 0.5,
-        maxScale: 5.0,
-        child: imageContent,
-      );
+      if (widget.tool == DicomTool.pan) {
+        imageContent = InteractiveViewer(
+          transformationController: _transformationController,
+          panEnabled: true,
+          scaleEnabled: true,
+          minScale: 0.5,
+          maxScale: 5.0,
+          child: imageContent,
+        );
+      } else {
+        imageContent = ClipRect(
+          child: Transform(
+            transform: _transformationController.value,
+            child: imageContent,
+          ),
+        );
+      }
     }
 
     return Container(
       color: Colors.black,
       child: Stack(
         children: [
-          // Image canvas with windowing drag gesture and double-tap reset
+          // Image canvas with gesture handling
           Positioned.fill(
             child: GestureDetector(
               key: const Key('dicom_windowing_gesture'),
-              onPanUpdate: _onPanUpdate,
+              onPanUpdate:
+                  (widget.enableZoom && widget.tool == DicomTool.pan)
+                      ? null
+                      : _onPanUpdate,
               onTapDown: _onTapDown,
               behavior: HitTestBehavior.opaque,
               child: imageContent,

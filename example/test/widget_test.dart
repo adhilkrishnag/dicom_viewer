@@ -4,6 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   testWidgets('App launches successfully', (WidgetTester tester) async {
     await tester.pumpWidget(const DicomViewerExampleApp());
-    expect(find.text('dicom_viewer v0.1.0'), findsOneWidget);
+    expect(find.text('DICOM Viewer Demo v0.2.0'), findsOneWidget);
   });
 }

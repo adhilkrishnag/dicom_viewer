@@ -42,6 +42,18 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
   double? _activeWc;
   double? _activeWw;
 
+  // v0.2.0 Interactive Viewer State
+  bool _enableZoom = true;
+  DicomTool _selectedTool = DicomTool.pan;
+  double _currentScale = 1.0;
+  Offset _currentOffset = Offset.zero;
+
+  /// Incremented only on explicit preset selection, reset, or new-file load.
+  /// Changing this key forces DicomImageWidget to recreate with the intended
+  /// initialWindowCenter/Width. Tool switching does NOT increment this —
+  /// the build() method handles structural changes without recreating state.
+  int _presetGeneration = 0;
+
   Future<void> _pickFile() async {
     setState(() {
       _isLoading = true;
@@ -69,7 +81,10 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
           _fileName = file.name;
           _activeWc = dataset.windowCenter;
           _activeWw = dataset.windowWidth;
+          _currentScale = 1.0;
+          _currentOffset = Offset.zero;
           _isLoading = false;
+          _presetGeneration++; // new file → fresh initial values
         });
       } else {
         setState(() {
@@ -99,7 +114,10 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
         _fileName = 'Sample_CT_Head.dcm';
         _activeWc = dataset.windowCenter;
         _activeWw = dataset.windowWidth;
+        _currentScale = 1.0;
+        _currentOffset = Offset.zero;
         _isLoading = false;
+        _presetGeneration++; // new sample → fresh initial values
       });
     } catch (e) {
       setState(() {
@@ -113,6 +131,7 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
     setState(() {
       _activeWc = center;
       _activeWw = width;
+      _presetGeneration++; // explicit preset → recreate widget with preset initial values
     });
   }
 
@@ -121,6 +140,9 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
       setState(() {
         _activeWc = _dataset!.windowCenter;
         _activeWw = _dataset!.windowWidth;
+        _currentScale = 1.0;
+        _currentOffset = Offset.zero;
+        _presetGeneration++; // explicit reset → recreate widget with original initial values
       });
     }
   }
@@ -129,7 +151,7 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('dicom_viewer v0.1.0'),
+        title: const Text('DICOM Viewer Demo v0.2.0'),
         actions: [
           IconButton(
             icon: const Icon(Icons.analytics_outlined),
@@ -145,7 +167,7 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
       ),
       body: Column(
         children: [
-          // Clinical Preset Buttons Bar
+          // Clinical Preset Buttons & Interactive Mode Toggle Bar
           if (_dataset != null)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -154,6 +176,82 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
+                    // Mode Toggle: Interactive Pan & Zoom (v0.2.0) vs Legacy Windowing (v0.1.0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.cyan.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.cyan.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _enableZoom ? Icons.zoom_in : Icons.contrast,
+                            size: 16,
+                            color: Colors.cyanAccent,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _enableZoom ? 'Interactive Mode' : 'Legacy Mode',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.cyanAccent,
+                            ),
+                          ),
+                          Switch(
+                            value: _enableZoom,
+                            activeThumbColor: Colors.cyanAccent,
+                            onChanged: (val) {
+                              setState(() {
+                                _enableZoom = val;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_enableZoom) ...[
+                      const SizedBox(width: 8),
+                      SegmentedButton<DicomTool>(
+                        segments: const [
+                          ButtonSegment<DicomTool>(
+                            value: DicomTool.pan,
+                            icon: Icon(Icons.pan_tool_outlined, size: 14),
+                            label: Text(
+                              'Pan & Zoom',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                          ),
+                          ButtonSegment<DicomTool>(
+                            value: DicomTool.windowing,
+                            icon: Icon(Icons.contrast, size: 14),
+                            label: Text(
+                              'Windowing',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                          ),
+                        ],
+                        selected: {_selectedTool},
+                        onSelectionChanged: (newSelection) {
+                          setState(() {
+                            _selectedTool = newSelection.first;
+                          });
+                        },
+                        style: const ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(width: 12),
                     const Text(
                       'Presets: ',
                       style: TextStyle(
@@ -285,12 +383,111 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                         ],
                       ),
                     )
-                    : DicomImageWidget(
-                      key: ValueKey('$_activeWc-$_activeWw'),
-                      dataset: _dataset!,
-                      initialWindowCenter: _activeWc,
-                      initialWindowWidth: _activeWw,
-                      showOverlay: true,
+                    : Stack(
+                      children: [
+                        Positioned.fill(
+                          child: DicomImageWidget(
+                            // Key only changes on: explicit preset, reset, or new-file
+                            // load (via _presetGeneration). Tool switching and enableZoom
+                            // toggling do NOT recreate the widget — the build() method
+                            // handles those structurally, preserving internal WC/WW state.
+                            key: ValueKey(
+                              '${_fileName ?? ""}-$_presetGeneration',
+                            ),
+                            dataset: _dataset!,
+                            initialWindowCenter: _activeWc,
+                            initialWindowWidth: _activeWw,
+                            enableZoom: _enableZoom,
+                            tool: _selectedTool,
+                            showOverlay: true,
+                            onWindowChanged: (center, width) {
+                              // Track silently — no setState to avoid unnecessary
+                              // rebuilds during drag. Values are up-to-date whenever
+                              // _presetGeneration increments and the widget recreates.
+                              _activeWc = center;
+                              _activeWw = width;
+                            },
+                            onViewChanged: (scale, offset) {
+                              setState(() {
+                                _currentScale = scale;
+                                _currentOffset = offset;
+                              });
+                            },
+                          ),
+                        ),
+
+                        // Gesture Legend / Guidance Card
+                        Positioned(
+                          top: 12,
+                          right: 12,
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.75),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.white24),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  !_enableZoom
+                                      ? 'Legacy Windowing Mode:'
+                                      : _selectedTool == DicomTool.pan
+                                      ? 'Interactive Pan & Zoom Tool:'
+                                      : 'Interactive Windowing Tool:',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.cyanAccent,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                if (_enableZoom) ...[
+                                  if (_selectedTool == DicomTool.pan)
+                                    const Text(
+                                      '🖐️ Drag: Pan Image Viewport',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.white70,
+                                      ),
+                                    )
+                                  else
+                                    const Text(
+                                      '🖐️ Drag: Adjust Contrast / Brightness',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                  const Text(
+                                    '🔍 Pinch / Wheel: Zoom Image (0.5x - 5.0x)',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ] else ...[
+                                  const Text(
+                                    '🖐️ Drag: Adjust Contrast / Brightness',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ],
+                                const Text(
+                                  '👆 Double-Tap: Reset Scale & Windowing',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
           ),
 
@@ -303,7 +500,7 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      'File: ${_fileName ?? "Unsaved"}\nModality: ${_dataset!.modality} | Size: ${_dataset!.columns}x${_dataset!.rows} | Rescale: ${_dataset!.rescaleSlope}x + ${_dataset!.rescaleIntercept}',
+                      'File: ${_fileName ?? "Unsaved"} | Modality: ${_dataset!.modality} | Size: ${_dataset!.columns}x${_dataset!.rows}\nRescale: ${_dataset!.rescaleSlope}x + ${_dataset!.rescaleIntercept} | Zoom: ${_currentScale.toStringAsFixed(2)}x | Offset: (${_currentOffset.dx.toStringAsFixed(0)}, ${_currentOffset.dy.toStringAsFixed(0)})',
                       style: const TextStyle(
                         fontSize: 11,
                         color: Colors.white70,
