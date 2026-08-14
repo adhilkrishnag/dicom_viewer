@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:dicom_viewer/dicom_viewer.dart';
 import 'package:file_picker/file_picker.dart';
@@ -48,13 +49,61 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
   double _currentScale = 1.0;
   Offset _currentOffset = Offset.zero;
 
+  // v0.3.0 Multi-Frame Navigation & Cine Playback State
+  int _currentFrame = 0;
+  Timer? _playTimer;
+  bool get _isPlaying => _playTimer != null && _playTimer!.isActive;
+
   /// Incremented only on explicit preset selection, reset, or new-file load.
   /// Changing this key forces DicomImageWidget to recreate with the intended
-  /// initialWindowCenter/Width. Tool switching does NOT increment this —
-  /// the build() method handles structural changes without recreating state.
+  /// initialWindowCenter/Width. Tool switching and frame scrubbing do NOT
+  /// increment this — the build() method handles structural changes without
+  /// recreating state.
   int _presetGeneration = 0;
 
+  @override
+  void dispose() {
+    _stopPlayback();
+    super.dispose();
+  }
+
+  void _stopPlayback() {
+    _playTimer?.cancel();
+    _playTimer = null;
+  }
+
+  void _setFrame(int frame) {
+    if (_dataset == null) return;
+    final total = _dataset!.numberOfFrames;
+    if (total <= 1) return;
+    setState(() {
+      _currentFrame = frame.clamp(0, total - 1);
+    });
+  }
+
+  void _togglePlayback() {
+    if (_isPlaying) {
+      setState(() {
+        _stopPlayback();
+      });
+    } else {
+      if (_dataset == null || _dataset!.numberOfFrames <= 1) return;
+      setState(() {
+        _playTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+          if (!mounted || _dataset == null || _dataset!.numberOfFrames <= 1) {
+            _stopPlayback();
+            return;
+          }
+          setState(() {
+            _currentFrame = (_currentFrame + 1) % _dataset!.numberOfFrames;
+          });
+        });
+      });
+    }
+  }
+
   Future<void> _pickFile() async {
+    _stopPlayback();
     setState(() {
       _isLoading = true;
       _error = null;
@@ -83,6 +132,7 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
           _activeWw = dataset.windowWidth;
           _currentScale = 1.0;
           _currentOffset = Offset.zero;
+          _currentFrame = 0;
           _isLoading = false;
           _presetGeneration++; // new file → fresh initial values
         });
@@ -100,6 +150,7 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
   }
 
   void _loadSampleDicom() {
+    _stopPlayback();
     setState(() {
       _isLoading = true;
       _error = null;
@@ -116,6 +167,7 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
         _activeWw = dataset.windowWidth;
         _currentScale = 1.0;
         _currentOffset = Offset.zero;
+        _currentFrame = 0;
         _isLoading = false;
         _presetGeneration++; // new sample → fresh initial values
       });
@@ -151,7 +203,7 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('DICOM Viewer Demo v0.2.0'),
+        title: const Text('DICOM Viewer Demo'),
         actions: [
           IconButton(
             icon: const Icon(Icons.analytics_outlined),
@@ -355,7 +407,7 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                           ),
                           const SizedBox(height: 8),
                           const Text(
-                            'Select a single-frame DICOM file (.dcm) or load sample.',
+                            'Select a DICOM file (.dcm) or load sample.',
                             style: TextStyle(color: Colors.white60),
                           ),
                           const SizedBox(height: 24),
@@ -388,13 +440,14 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                         Positioned.fill(
                           child: DicomImageWidget(
                             // Key only changes on: explicit preset, reset, or new-file
-                            // load (via _presetGeneration). Tool switching and enableZoom
-                            // toggling do NOT recreate the widget — the build() method
+                            // load (via _presetGeneration). Tool switching and frame scrubbing
+                            // do NOT recreate the widget — the build() method
                             // handles those structurally, preserving internal WC/WW state.
                             key: ValueKey(
                               '${_fileName ?? ""}-$_presetGeneration',
                             ),
                             dataset: _dataset!,
+                            frameIndex: _currentFrame,
                             initialWindowCenter: _activeWc,
                             initialWindowWidth: _activeWw,
                             enableZoom: _enableZoom,
@@ -491,6 +544,100 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                     ),
           ),
 
+          // Multi-Frame Navigation Bar (Only visible when numberOfFrames > 1)
+          if (_dataset != null && _dataset!.numberOfFrames > 1)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              color: const Color(0xFF161616),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      _isPlaying
+                          ? Icons.pause_circle_filled
+                          : Icons.play_circle_filled,
+                    ),
+                    color: Colors.cyanAccent,
+                    iconSize: 28,
+                    tooltip:
+                        _isPlaying
+                            ? 'Pause Cine Playback'
+                            : 'Start Cine Playback',
+                    onPressed: _togglePlayback,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.skip_previous, size: 20),
+                    tooltip: 'Previous Frame',
+                    onPressed:
+                        _currentFrame > 0
+                            ? () {
+                              _stopPlayback();
+                              _setFrame(_currentFrame - 1);
+                            }
+                            : null,
+                  ),
+                  Expanded(
+                    child: SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        activeTrackColor: Colors.cyanAccent,
+                        inactiveTrackColor: Colors.white24,
+                        thumbColor: Colors.cyanAccent,
+                        overlayColor: Colors.cyanAccent.withValues(alpha: 0.2),
+                        trackHeight: 3,
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 6,
+                        ),
+                      ),
+                      child: Slider(
+                        value: _currentFrame.toDouble().clamp(
+                          0.0,
+                          (_dataset!.numberOfFrames - 1).toDouble(),
+                        ),
+                        min: 0.0,
+                        max: (_dataset!.numberOfFrames - 1).toDouble(),
+                        divisions: _dataset!.numberOfFrames - 1,
+                        onChanged: (val) {
+                          _stopPlayback();
+                          _setFrame(val.round());
+                        },
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.skip_next, size: 20),
+                    tooltip: 'Next Frame',
+                    onPressed:
+                        _currentFrame < _dataset!.numberOfFrames - 1
+                            ? () {
+                              _stopPlayback();
+                              _setFrame(_currentFrame + 1);
+                            }
+                            : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white10,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Text(
+                      'Frame ${_currentFrame + 1} / ${_dataset!.numberOfFrames}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.cyanAccent,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // Metadata & Controls Footer
           if (_dataset != null)
             Container(
@@ -500,7 +647,7 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      'File: ${_fileName ?? "Unsaved"} | Modality: ${_dataset!.modality} | Size: ${_dataset!.columns}x${_dataset!.rows}\nRescale: ${_dataset!.rescaleSlope}x + ${_dataset!.rescaleIntercept} | Zoom: ${_currentScale.toStringAsFixed(2)}x | Offset: (${_currentOffset.dx.toStringAsFixed(0)}, ${_currentOffset.dy.toStringAsFixed(0)})',
+                      'File: ${_fileName ?? "Unsaved"} | Modality: ${_dataset!.modality} | Size: ${_dataset!.columns}x${_dataset!.rows}${_dataset!.numberOfFrames > 1 ? " | Frame: ${_currentFrame + 1}/${_dataset!.numberOfFrames}" : ""}\nRescale: ${_dataset!.rescaleSlope}x + ${_dataset!.rescaleIntercept} | Zoom: ${_currentScale.toStringAsFixed(2)}x | Offset: (${_currentOffset.dx.toStringAsFixed(0)}, ${_currentOffset.dy.toStringAsFixed(0)})',
                       style: const TextStyle(
                         fontSize: 11,
                         color: Colors.white70,

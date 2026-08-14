@@ -90,9 +90,11 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
   @override
   void didUpdateWidget(DicomImageWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.dataset != widget.dataset ||
-        oldWidget.frameIndex != widget.frameIndex) {
+    if (oldWidget.dataset != widget.dataset) {
       _initWindowing();
+      _transformationController.value = Matrix4.identity();
+      _renderImage();
+    } else if (oldWidget.frameIndex != widget.frameIndex) {
       _renderImage();
     }
   }
