@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import '../pixel_data/encapsulated_pixel_data.dart';
 import 'data_element.dart';
 import 'dicom_parser.dart';
 import 'tag.dart';
@@ -103,6 +104,14 @@ class DicomDataset {
     return elem?.asDoubleList ?? const [];
   }
 
-  /// Raw pixel data bytes.
-  Uint8List? get pixelDataBytes => getElement(DicomTag.pixelData)?.valueBytes;
+  /// Internal encapsulated pixel data container.
+  EncapsulatedPixelData? get encapsulatedData =>
+      getElement(DicomTag.pixelData)?.encapsulatedData;
+
+  /// Raw pixel data bytes. Derived lazily for encapsulated data.
+  Uint8List? get pixelDataBytes {
+    final enc = encapsulatedData;
+    if (enc != null) return enc.flatBytes;
+    return getElement(DicomTag.pixelData)?.valueBytes;
+  }
 }

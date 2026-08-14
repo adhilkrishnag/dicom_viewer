@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../pixel_data/encapsulated_pixel_data.dart';
 import 'data_element.dart';
 import 'tag.dart';
 import 'tag_dictionary.dart';
@@ -131,8 +132,12 @@ class DicomParser {
         if (tag == DicomTag.pixelData) {
           // Encapsulated / Undefined length Pixel Data (7FE0, 0010)
           // Scan forward for Sequence Delimitation Tag (FFFE, E0DD)
-          final fragmentBytes = BytesBuilder();
+          final botOffsets = <int>[];
+          final fragments = <InternalFragment>[];
           bool isFirstItem = true;
+          int currentRelativeTagStart = 0;
+          int itemIndex = 1;
+
           while (offset + 8 <= bytes.length) {
             final fGroup = bd.getUint16(
               offset,
@@ -155,18 +160,43 @@ class DicomParser {
 
             if (fGroup == 0xFFFE && fElem == 0xE000) {
               if (isFirstItem) {
-                // Item #0 is the Basic Offset Table (BOT). Skip BOT payload!
+                // Item #0 is the Basic Offset Table (BOT). Parse BOT offsets!
                 isFirstItem = false;
-                if (fLen > 0 &&
-                    fLen != 0xFFFFFFFF &&
-                    offset + fLen <= bytes.length) {
+                if (fLen > 0) {
+                  if (fLen == 0xFFFFFFFF || fLen % 4 != 0) {
+                    throw FormatException(
+                      'Invalid Basic Offset Table item length ($fLen bytes). BOT length must be a multiple of 4.',
+                    );
+                  }
+                  if (offset + fLen > bytes.length) {
+                    throw FormatException(
+                      'Truncated DICOM file: Basic Offset Table item length ($fLen bytes) extends beyond file length.',
+                    );
+                  }
+                  final numEntries = fLen ~/ 4;
+                  for (int i = 0; i < numEntries; i++) {
+                    final offVal = bd.getUint32(
+                      offset + i * 4,
+                      currentLittleEndian ? Endian.little : Endian.big,
+                    );
+                    botOffsets.add(offVal);
+                  }
                   offset += fLen;
                 }
               } else {
                 if (fLen > 0 &&
                     fLen != 0xFFFFFFFF &&
                     offset + fLen <= bytes.length) {
-                  fragmentBytes.add(bytes.sublist(offset, offset + fLen));
+                  final payloadSlice = bytes.sublist(offset, offset + fLen);
+                  fragments.add(
+                    InternalFragment(
+                      index: itemIndex,
+                      relativeTagStart: currentRelativeTagStart,
+                      payload: payloadSlice,
+                    ),
+                  );
+                  currentRelativeTagStart += 8 + fLen;
+                  itemIndex++;
                   offset += fLen;
                 }
               }
@@ -177,14 +207,19 @@ class DicomParser {
             }
           }
 
-          final valueData = fragmentBytes.toBytes();
+          final encData = EncapsulatedPixelData(
+            botOffsets: botOffsets,
+            fragments: fragments,
+          );
+
           elements.add(
             DicomDataElement(
               tag: tag,
               vr: vr,
-              valueLength: valueData.length,
-              valueBytes: valueData,
+              valueLength: 0,
+              valueBytes: Uint8List(0),
               isLittleEndian: currentLittleEndian,
+              encapsulatedData: encData,
             ),
           );
           continue;

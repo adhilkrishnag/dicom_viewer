@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../pixel_data/encapsulated_pixel_data.dart';
 import 'tag.dart';
 import 'value_representation.dart';
 
@@ -12,6 +13,7 @@ class DicomDataElement {
     required this.valueLength,
     required this.valueBytes,
     this.isLittleEndian = true,
+    this.encapsulatedData,
   });
 
   final DicomTag tag;
@@ -19,6 +21,7 @@ class DicomDataElement {
   final int valueLength;
   final Uint8List valueBytes;
   final bool isLittleEndian;
+  final EncapsulatedPixelData? encapsulatedData;
 
   /// Interpret value as string.
   String get asString {
