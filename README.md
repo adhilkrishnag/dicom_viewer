@@ -8,6 +8,14 @@ A **pure-Dart, cross-platform DICOM viewer package for Flutter**. Parses single-
 
 ---
 
+## ⚕️ Medical Use Disclaimer
+
+`dicom_viewer` is an open-source software library intended for image processing, visualization, and application development. It is not a certified or approved medical device and has not been evaluated or authorized by regulatory authorities for clinical diagnosis, treatment, or other patient-care decisions. It is not intended to replace the judgment of qualified healthcare professionals or to be used as the sole basis for clinical decision-making.
+
+Developers are responsible for determining the suitability, validation, regulatory requirements, and intended use of applications built using this library.
+
+---
+
 ## ✨ Features
 
 - ⚡ **100% Pure Dart**: Zero C/C++ or FFI native code dependencies. Completely self-contained.
@@ -153,12 +161,6 @@ print('Window Width Presets: ${dataset.windowWidthPresets}');
 - [x] **v0.2.0** — Pure-Dart RLE Lossless decompressor, Pixel Padding Value filtering, multi-valued clinical window presets, multi-frame groundwork (`frameIndex`), interactive pan/zoom & double-tap reset.
 - [ ] **v0.3.0** — Real-world RLE fixture validation, JPEG 2000 / JPEG Baseline decompressors, multi-frame slice player toolbar.
 - [ ] **v0.4.0** — Measurement tools (Distance in mm, Area, Hounsfield Unit ROI statistics).
-
----
-
-## ⚠️ Disclaimer
-
-This package is an open-source software library intended for image processing, visualization, and application development. It is **not** certified as a medical device by any regulatory authority (such as FDA or CE) and is **not** intended for primary clinical diagnosis or medical treatment.
 
 ---
 

@@ -199,12 +199,59 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
     }
   }
 
+  void _showDisclaimerDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(
+                  Icons.medical_information_outlined,
+                  color: Colors.cyanAccent,
+                  size: 22,
+                ),
+                SizedBox(width: 8),
+                Text(
+                  'Medical Use Disclaimer',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            content: const SingleChildScrollView(
+              child: Text(
+                'Medical Use Disclaimer: This example is for software development, research, testing, and visualization purposes. It is not a certified or approved medical device and is not intended for primary clinical diagnosis, treatment, or patient-care decisions.\n\nDevelopers are responsible for determining the suitability, validation, regulatory requirements, and intended use of applications built using this library.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.white70,
+                  height: 1.4,
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text(
+                  'OK',
+                  style: TextStyle(color: Colors.cyanAccent),
+                ),
+              ),
+            ],
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('DICOM Viewer Demo'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            tooltip: 'Medical Use Disclaimer',
+            onPressed: () => _showDisclaimerDialog(context),
+          ),
           IconButton(
             icon: const Icon(Icons.analytics_outlined),
             tooltip: 'Load Sample CT',
@@ -431,6 +478,21 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                                 label: const Text('Select DICOM File'),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 32),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24.0,
+                            ),
+                            child: Text(
+                              'Medical Use Disclaimer: This example is for software development, research, testing, and visualization purposes. It is not a certified or approved medical device and is not intended for primary clinical diagnosis, treatment, or patient-care decisions.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.white.withValues(alpha: 0.38),
+                                height: 1.3,
+                              ),
+                            ),
                           ),
                         ],
                       ),
