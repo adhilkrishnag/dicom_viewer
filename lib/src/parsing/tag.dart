@@ -48,12 +48,15 @@ class DicomTag implements Comparable<DicomTag> {
   static const DicomTag transferSyntaxUid = DicomTag(0x0002, 0x0010);
 
   // Group 0008 - General Information
+  static const DicomTag sopClassUid = DicomTag(0x0008, 0x0016);
+  static const DicomTag sopInstanceUid = DicomTag(0x0008, 0x0018);
   static const DicomTag studyDate = DicomTag(0x0008, 0x0020);
   static const DicomTag seriesDate = DicomTag(0x0008, 0x0021);
   static const DicomTag acquisitionDate = DicomTag(0x0008, 0x0022);
   static const DicomTag contentDate = DicomTag(0x0008, 0x0023);
   static const DicomTag studyTime = DicomTag(0x0008, 0x0030);
   static const DicomTag seriesTime = DicomTag(0x0008, 0x0031);
+  static const DicomTag acquisitionTime = DicomTag(0x0008, 0x0032);
   static const DicomTag modality = DicomTag(0x0008, 0x0060);
   static const DicomTag manufacturer = DicomTag(0x0008, 0x0070);
   static const DicomTag institutionName = DicomTag(0x0008, 0x0080);
@@ -66,6 +69,9 @@ class DicomTag implements Comparable<DicomTag> {
   static const DicomTag patientBirthDate = DicomTag(0x0010, 0x0030);
   static const DicomTag patientSex = DicomTag(0x0010, 0x0040);
   static const DicomTag patientAge = DicomTag(0x0010, 0x1010);
+
+  // Group 0018 - Acquisition / Equipment
+  static const DicomTag sliceThickness = DicomTag(0x0018, 0x0050);
 
   // Group 0020 - Relationship / Structure
   static const DicomTag studyInstanceUid = DicomTag(0x0020, 0x000D);
@@ -81,6 +87,7 @@ class DicomTag implements Comparable<DicomTag> {
   static const DicomTag planarConfiguration = DicomTag(0x0028, 0x0006);
   static const DicomTag rows = DicomTag(0x0028, 0x0010);
   static const DicomTag columns = DicomTag(0x0028, 0x0011);
+  static const DicomTag pixelSpacing = DicomTag(0x0028, 0x0030);
   static const DicomTag bitsAllocated = DicomTag(0x0028, 0x0100);
   static const DicomTag bitsStored = DicomTag(0x0028, 0x0101);
   static const DicomTag highBit = DicomTag(0x0028, 0x0102);

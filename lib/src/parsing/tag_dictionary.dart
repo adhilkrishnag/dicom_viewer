@@ -52,6 +52,18 @@ class TagDictionary {
     ),
 
     // Group 0008 General
+    DicomTag.sopClassUid: const TagInfo(
+      tag: DicomTag.sopClassUid,
+      name: 'SOP Class UID',
+      vr: ValueRepresentation.ui,
+      keyword: 'SOPClassUID',
+    ),
+    DicomTag.sopInstanceUid: const TagInfo(
+      tag: DicomTag.sopInstanceUid,
+      name: 'SOP Instance UID',
+      vr: ValueRepresentation.ui,
+      keyword: 'SOPInstanceUID',
+    ),
     DicomTag.studyDate: const TagInfo(
       tag: DicomTag.studyDate,
       name: 'Study Date',
@@ -75,6 +87,12 @@ class TagDictionary {
       name: 'Series Time',
       vr: ValueRepresentation.tm,
       keyword: 'SeriesTime',
+    ),
+    DicomTag.acquisitionTime: const TagInfo(
+      tag: DicomTag.acquisitionTime,
+      name: 'Acquisition Time',
+      vr: ValueRepresentation.tm,
+      keyword: 'AcquisitionTime',
     ),
     DicomTag.modality: const TagInfo(
       tag: DicomTag.modality,
@@ -131,6 +149,14 @@ class TagDictionary {
       name: "Patient's Sex",
       vr: ValueRepresentation.cs,
       keyword: 'PatientSex',
+    ),
+
+    // Group 0018 Acquisition / Equipment
+    DicomTag.sliceThickness: const TagInfo(
+      tag: DicomTag.sliceThickness,
+      name: 'Slice Thickness',
+      vr: ValueRepresentation.ds,
+      keyword: 'SliceThickness',
     ),
 
     // Group 0020 Relationship
@@ -195,6 +221,12 @@ class TagDictionary {
       name: 'Columns',
       vr: ValueRepresentation.us,
       keyword: 'Columns',
+    ),
+    DicomTag.pixelSpacing: const TagInfo(
+      tag: DicomTag.pixelSpacing,
+      name: 'Pixel Spacing',
+      vr: ValueRepresentation.ds,
+      keyword: 'PixelSpacing',
     ),
     DicomTag.bitsAllocated: const TagInfo(
       tag: DicomTag.bitsAllocated,
