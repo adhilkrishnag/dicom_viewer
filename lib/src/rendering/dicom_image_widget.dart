@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../parsing/dicom_dataset.dart';
+import '../windowing/photometric.dart';
 import 'dicom_renderer.dart';
 
 /// Gesture tool mode when [DicomImageWidget.enableZoom] is enabled.
@@ -90,9 +91,11 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
   @override
   void didUpdateWidget(DicomImageWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.dataset != widget.dataset ||
-        oldWidget.frameIndex != widget.frameIndex) {
+    if (oldWidget.dataset != widget.dataset) {
       _initWindowing();
+      _transformationController.value = Matrix4.identity();
+      _renderImage();
+    } else if (oldWidget.frameIndex != widget.frameIndex) {
       _renderImage();
     }
   }
@@ -173,7 +176,32 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     }
   }
 
+  bool get _isMonochrome {
+    final photo = PhotometricInterpretationX.parse(
+      widget.dataset.photometricInterpretation,
+    );
+    return photo.isMonochrome;
+  }
+
+  String get _colorModeLabel {
+    final photo = PhotometricInterpretationX.parse(
+      widget.dataset.photometricInterpretation,
+    );
+    switch (photo) {
+      case PhotometricInterpretation.paletteColor:
+        return 'Color: Palette LUT';
+      case PhotometricInterpretation.rgb:
+        return 'Color: RGB';
+      case PhotometricInterpretation.ybrFull:
+        return 'Color: YBR';
+      default:
+        return 'Color: ${widget.dataset.photometricInterpretation}';
+    }
+  }
+
   void _onPanUpdate(DragUpdateDetails details) {
+    if (!_isMonochrome) return;
+
     setState(() {
       _windowWidth += details.delta.dx * widget.sensitivity;
       _windowCenter -= details.delta.dy * widget.sensitivity;
@@ -186,11 +214,17 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
   }
 
   void resetWindowing() {
-    setState(() {
-      _initWindowing();
-      _transformationController.value = Matrix4.identity();
-    });
-    unawaited(_renderImage());
+    if (_isMonochrome) {
+      setState(() {
+        _initWindowing();
+        _transformationController.value = Matrix4.identity();
+      });
+      unawaited(_renderImage());
+    } else {
+      setState(() {
+        _transformationController.value = Matrix4.identity();
+      });
+    }
   }
 
   int _lastTapTime = 0;
@@ -205,15 +239,53 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     }
   }
 
+  /// Calculates the display aspect ratio (width / height) for physical pixel geometry.
+  ///
+  /// In DICOM PS3.3 Section 10.7.1.3 and C.7.6.3.1.2, [DicomDataset.pixelSpacing] (0028,0030) specifies:
+  /// - Index 0: Row Spacing (vertical distance between adjacent row centers, $S_y$, in mm).
+  /// - Index 1: Column Spacing (horizontal distance between adjacent column centers, $S_x$, in mm).
+  ///
+  /// Physical display aspect ratio is calculated as:
+  /// `(columns * columnSpacing) / (rows * rowSpacing)`
+  ///
+  /// If [pixelSpacing] is null, does not contain exactly 2 values, has values <= 0,
+  /// contains non-finite numbers, or image dimensions are invalid (rows/cols <= 0),
+  /// it safely falls back to native matrix aspect ratio: `columns / rows`.
+  double get _displayAspectRatio {
+    final cols = widget.dataset.columns;
+    final rows = widget.dataset.rows;
+    if (cols <= 0 || rows <= 0) return 1.0;
+
+    final spacing = widget.dataset.pixelSpacing;
+    if (spacing != null && spacing.length == 2) {
+      final rowSpacing = spacing[0]; // Sy (vertical)
+      final colSpacing = spacing[1]; // Sx (horizontal)
+      if (rowSpacing > 0 &&
+          colSpacing > 0 &&
+          rowSpacing.isFinite &&
+          colSpacing.isFinite) {
+        final ar = (cols * colSpacing) / (rows * rowSpacing);
+        if (ar > 0 && ar.isFinite) {
+          return ar;
+        }
+      }
+    }
+
+    return cols / rows;
+  }
+
   @override
   Widget build(BuildContext context) {
     Widget imageContent = Center(
       child:
           _renderedImage != null
-              ? RawImage(
-                image: _renderedImage,
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.medium,
+              ? AspectRatio(
+                aspectRatio: _displayAspectRatio,
+                child: RawImage(
+                  image: _renderedImage,
+                  fit: BoxFit.fill,
+                  filterQuality: FilterQuality.medium,
+                ),
               )
               : Container(),
     );
@@ -328,23 +400,35 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
                       shadows: [Shadow(blurRadius: 4, color: Colors.black)],
                     ),
                   ),
-                  Text(
-                    'WC: ${_windowCenter.round()}  WW: ${_windowWidth.round()}',
-                    style: const TextStyle(
-                      color: Colors.greenAccent,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                  if (_isMonochrome) ...[
+                    Text(
+                      'WC: ${_windowCenter.round()}  WW: ${_windowWidth.round()}',
+                      style: const TextStyle(
+                        color: Colors.greenAccent,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                      ),
                     ),
-                  ),
-                  const Text(
-                    'Drag to adjust contrast / brightness',
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 10,
-                      fontStyle: FontStyle.italic,
+                    const Text(
+                      'Drag to adjust contrast / brightness',
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 10,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
-                  ),
+                  ] else ...[
+                    Text(
+                      _colorModeLabel,
+                      style: const TextStyle(
+                        color: Colors.cyanAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

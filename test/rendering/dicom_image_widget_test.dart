@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:dicom_viewer/dicom_viewer.dart';
 import 'package:flutter/material.dart';
@@ -501,6 +502,404 @@ void main() {
           matching: find.byType(ClipRect),
         );
         expect(clipRectFinder, findsOneWidget);
+      },
+    );
+  });
+
+  group('DicomImageWidget Multi-Frame & Dataset Update Tests (v0.3.0 Scope)', () {
+    late DicomDataset multiFrameDataset;
+    late DicomDataset singleFrameDatasetA;
+    late DicomDataset singleFrameDatasetB;
+
+    setUp(() {
+      // 4x4 8-bit uncompressed image with 2 frames
+      // Frame 0: 16 bytes of 10
+      // Frame 1: 16 bytes of 200
+      final multiFramePixels = Uint8List.fromList([
+        ...List.filled(16, 10),
+        ...List.filled(16, 200),
+      ]);
+
+      final multiFrameBytes = SyntheticDicomGenerator.create(
+        width: 4,
+        height: 4,
+        bitsAllocated: 8,
+        bitsStored: 8,
+        highBit: 7,
+        rescaleIntercept: 0.0,
+        windowCenter: 40.0,
+        windowWidth: 400.0,
+        numberOfFrames: 2,
+        customRgbBytes: multiFramePixels,
+        patientName: 'MULTIFRAME^TEST',
+        modality: 'MR',
+      );
+      multiFrameDataset = DicomDataset.fromBytes(multiFrameBytes);
+
+      final bytesA = SyntheticDicomGenerator.create(
+        width: 4,
+        height: 4,
+        bitsAllocated: 8,
+        bitsStored: 8,
+        highBit: 7,
+        rescaleIntercept: 0.0,
+        windowCenter: 40.0,
+        windowWidth: 400.0,
+        patientName: 'DATASET^A',
+        modality: 'CT',
+      );
+      singleFrameDatasetA = DicomDataset.fromBytes(bytesA);
+
+      final bytesB = SyntheticDicomGenerator.create(
+        width: 4,
+        height: 4,
+        bitsAllocated: 8,
+        bitsStored: 8,
+        highBit: 7,
+        rescaleIntercept: 0.0,
+        windowCenter: 100.0,
+        windowWidth: 200.0,
+        patientName: 'DATASET^B',
+        modality: 'MR',
+      );
+      singleFrameDatasetB = DicomDataset.fromBytes(bytesB);
+    });
+
+    testWidgets(
+      'frameIndex change triggers a re-render and updates rendered image',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DicomImageWidget(dataset: multiFrameDataset, frameIndex: 0),
+            ),
+          ),
+        );
+
+        await tester.runAsync(
+          () async => Future.delayed(const Duration(milliseconds: 100)),
+        );
+        await tester.pump();
+
+        final rawImage0Finder = find.byType(RawImage);
+        expect(rawImage0Finder, findsOneWidget);
+        final image0 = tester.widget<RawImage>(rawImage0Finder).image;
+        expect(image0, isNotNull);
+        expect(image0!.width, equals(4));
+        expect(image0.height, equals(4));
+
+        // Update frameIndex to 1
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DicomImageWidget(dataset: multiFrameDataset, frameIndex: 1),
+            ),
+          ),
+        );
+
+        await tester.runAsync(
+          () async => Future.delayed(const Duration(milliseconds: 100)),
+        );
+        await tester.pump();
+
+        final rawImage1Finder = find.byType(RawImage);
+        expect(rawImage1Finder, findsOneWidget);
+        final image1 = tester.widget<RawImage>(rawImage1Finder).image;
+        expect(image1, isNotNull);
+        expect(image1!.width, equals(4));
+        expect(image1.height, equals(4));
+        expect(find.textContaining('Error rendering image:'), findsNothing);
+        expect(find.byType(CircularProgressIndicator), findsNothing);
+      },
+    );
+
+    testWidgets('WC/WW remains unchanged across frame changes', (
+      WidgetTester tester,
+    ) async {
+      double? activeCenter;
+      double? activeWidth;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DicomImageWidget(
+              dataset: multiFrameDataset,
+              frameIndex: 0,
+              sensitivity: 2.0,
+              onWindowChanged: (c, w) {
+                activeCenter = c;
+                activeWidth = w;
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.runAsync(
+        () async => Future.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+
+      // Initial overlay check: WC=40, WW=400
+      expect(find.textContaining('WC: 40  WW: 400'), findsOneWidget);
+
+      // Drag to modify WC and WW
+      final gestureFinder = find.byKey(const Key('dicom_windowing_gesture'));
+      await tester.drag(gestureFinder, const Offset(100, -50));
+      await tester.runAsync(
+        () async => Future.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+
+      expect(activeCenter, greaterThan(40.0));
+      expect(activeWidth, greaterThan(400.0));
+      final modifiedWc = activeCenter!.round();
+      final modifiedWw = activeWidth!.round();
+      expect(
+        find.textContaining('WC: $modifiedWc  WW: $modifiedWw'),
+        findsOneWidget,
+      );
+
+      // Switch frameIndex from 0 to 1 without resetting dataset
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DicomImageWidget(
+              dataset: multiFrameDataset,
+              frameIndex: 1,
+              sensitivity: 2.0,
+              onWindowChanged: (c, w) {
+                activeCenter = c;
+                activeWidth = w;
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.runAsync(
+        () async => Future.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+
+      // Overlay MUST still show the modified WC/WW values, not the initial 40/400
+      expect(
+        find.textContaining('WC: $modifiedWc  WW: $modifiedWw'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('WC: 40  WW: 400'), findsNothing);
+    });
+
+    testWidgets(
+      'zoom/pan transformation remains unchanged across frame changes',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DicomImageWidget(
+                dataset: multiFrameDataset,
+                frameIndex: 0,
+                enableZoom: true,
+                tool: DicomTool.pan,
+              ),
+            ),
+          ),
+        );
+
+        await tester.runAsync(
+          () async => Future.delayed(const Duration(milliseconds: 100)),
+        );
+        await tester.pump();
+
+        final ivFinder = find.byType(InteractiveViewer);
+        expect(ivFinder, findsOneWidget);
+
+        // Drag on InteractiveViewer to pan
+        await tester.drag(ivFinder, const Offset(60, 40));
+        await tester.pump();
+
+        final controllerBefore =
+            tester
+                .widget<InteractiveViewer>(ivFinder)
+                .transformationController!;
+        final matrixBefore = controllerBefore.value.clone();
+        expect(matrixBefore, isNot(equals(Matrix4.identity())));
+
+        // Switch to frame 1
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DicomImageWidget(
+                dataset: multiFrameDataset,
+                frameIndex: 1,
+                enableZoom: true,
+                tool: DicomTool.pan,
+              ),
+            ),
+          ),
+        );
+
+        await tester.runAsync(
+          () async => Future.delayed(const Duration(milliseconds: 100)),
+        );
+        await tester.pump();
+
+        final controllerAfter =
+            tester
+                .widget<InteractiveViewer>(find.byType(InteractiveViewer))
+                .transformationController!;
+        expect(controllerAfter.value, equals(matrixBefore));
+      },
+    );
+
+    testWidgets('changing dataset resets WC/WW to the new dataset default', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DicomImageWidget(
+              dataset: singleFrameDatasetA,
+              sensitivity: 2.0,
+            ),
+          ),
+        ),
+      );
+
+      await tester.runAsync(
+        () async => Future.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+
+      expect(find.textContaining('WC: 40  WW: 400'), findsOneWidget);
+      expect(find.text('DATASET^A'), findsOneWidget);
+
+      // Modify WC/WW
+      final gestureFinder = find.byKey(const Key('dicom_windowing_gesture'));
+      await tester.drag(gestureFinder, const Offset(100, -50));
+      await tester.runAsync(
+        () async => Future.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+
+      expect(find.textContaining('WC: 40  WW: 400'), findsNothing);
+
+      // Switch to dataset B
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DicomImageWidget(
+              dataset: singleFrameDatasetB,
+              sensitivity: 2.0,
+            ),
+          ),
+        ),
+      );
+
+      await tester.runAsync(
+        () async => Future.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+
+      // WC/WW should be reset to dataset B's defaults (WC: 100, WW: 200)
+      expect(find.text('DATASET^B'), findsOneWidget);
+      expect(find.textContaining('WC: 100  WW: 200'), findsOneWidget);
+    });
+
+    testWidgets('changing dataset resets zoom/pan transformation to identity', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DicomImageWidget(
+              dataset: singleFrameDatasetA,
+              enableZoom: true,
+              tool: DicomTool.pan,
+            ),
+          ),
+        ),
+      );
+
+      await tester.runAsync(
+        () async => Future.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+
+      final ivFinder = find.byType(InteractiveViewer);
+      await tester.drag(ivFinder, const Offset(60, 40));
+      await tester.pump();
+
+      final controllerBefore =
+          tester.widget<InteractiveViewer>(ivFinder).transformationController!;
+      expect(controllerBefore.value, isNot(equals(Matrix4.identity())));
+
+      // Switch to dataset B
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DicomImageWidget(
+              dataset: singleFrameDatasetB,
+              enableZoom: true,
+              tool: DicomTool.pan,
+            ),
+          ),
+        ),
+      );
+
+      await tester.runAsync(
+        () async => Future.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+
+      final controllerAfter =
+          tester
+              .widget<InteractiveViewer>(find.byType(InteractiveViewer))
+              .transformationController!;
+      expect(controllerAfter.value, equals(Matrix4.identity()));
+    });
+
+    testWidgets(
+      'invalid frameIndex produces the correct widget error-state UI',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DicomImageWidget(
+                dataset: multiFrameDataset,
+                frameIndex: 99, // Out-of-bounds (total frames: 2)
+              ),
+            ),
+          ),
+        );
+
+        await tester.runAsync(
+          () async => Future.delayed(const Duration(milliseconds: 100)),
+        );
+        await tester.pump();
+
+        // 1. Error header text is displayed
+        expect(find.textContaining('Error rendering image:'), findsOneWidget);
+
+        // 2. Exact error description from RangeError is surfaced
+        expect(
+          find.textContaining('Invalid frameIndex 99 (total frames: 2)'),
+          findsOneWidget,
+        );
+
+        // 3. Loading indicator is hidden
+        expect(find.byType(CircularProgressIndicator), findsNothing);
+
+        // 4. Medical overlay is hidden
+        expect(find.textContaining('WC:'), findsNothing);
+        expect(find.text('MULTIFRAME^TEST'), findsNothing);
+
+        // 5. Verify error text styling
+        final errorTextWidget = tester.widget<Text>(
+          find.textContaining('Error rendering image:'),
+        );
+        expect(errorTextWidget.style?.color, equals(Colors.redAccent));
+        expect(errorTextWidget.textAlign, equals(TextAlign.center));
       },
     );
   });

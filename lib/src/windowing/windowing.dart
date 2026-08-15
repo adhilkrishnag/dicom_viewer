@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../pixel_data/pixel_data_info.dart';
+import 'palette_color_lut.dart';
 import 'photometric.dart';
 
 /// Pure mathematical transformations for DICOM Rescale and Windowing (Contrast/Brightness).
@@ -104,6 +105,7 @@ class Windowing {
     double? windowWidth,
     double rescaleSlope = 1.0,
     double rescaleIntercept = 0.0,
+    PaletteColorLut? paletteLut,
   }) {
     final photo = PhotometricInterpretationX.parse(
       info.photometricInterpretation,
@@ -225,6 +227,13 @@ class Windowing {
         rgbaBytes[dstOffset + 2] = b;
         rgbaBytes[dstOffset + 3] = 255;
       }
+    } else if (photo == PhotometricInterpretation.paletteColor) {
+      if (paletteLut == null) {
+        throw const FormatException(
+          'Missing Palette Color Lookup Table for PALETTE COLOR image.',
+        );
+      }
+      paletteLut.mapPixelsToRgba(rawPixels, rgbaBytes, pixelCount);
     } else {
       // Default fallback for other color modes
       for (int i = 0; i < pixelCount; i++) {

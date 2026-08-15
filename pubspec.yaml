@@ -1,7 +1,7 @@
 name: dicom_viewer
 description: >-
-  A pure-Dart, cross-platform DICOM viewer for Flutter. Parses uncompressed DICOM files, applies windowing, and renders medical images across Web, Desktop, and Mobile.
-version: 0.2.0
+  A pure-Dart DICOM viewer for Flutter. Parses uncompressed and RLE DICOM files, applies VOI windowing and PALETTE LUTs, and renders images across Web, Desktop, and Mobile.
+version: 0.3.0
 homepage: https://github.com/adhilkrishnag/dicom_viewer
 repository: https://github.com/adhilkrishnag/dicom_viewer
 
