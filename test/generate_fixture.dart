@@ -18,6 +18,8 @@ class SyntheticDicomGenerator {
     double windowWidth = 400.0,
     String? windowCenterString,
     String? windowWidthString,
+    List<double>? pixelSpacing,
+    String? pixelSpacingString,
     int? numberOfFrames,
     String patientName = 'TEST^PATIENT',
     String modality = 'CT',
@@ -112,6 +114,17 @@ class SyntheticDicomGenerator {
       'DS',
       windowWidthString ?? windowWidth.toString(),
     );
+
+    if (pixelSpacingString != null) {
+      writeString(0x0028, 0x0030, 'DS', pixelSpacingString);
+    } else if (pixelSpacing != null && pixelSpacing.length == 2) {
+      writeString(
+        0x0028,
+        0x0030,
+        'DS',
+        '${pixelSpacing[0]}\\${pixelSpacing[1]}',
+      );
+    }
 
     // Group 7FE0 Pixel Data
     if (rawEncapsulatedBytes != null) {
