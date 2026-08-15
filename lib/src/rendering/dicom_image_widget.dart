@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../parsing/dicom_dataset.dart';
+import '../windowing/photometric.dart';
 import 'dicom_renderer.dart';
 
 /// Gesture tool mode when [DicomImageWidget.enableZoom] is enabled.
@@ -175,7 +176,32 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     }
   }
 
+  bool get _isMonochrome {
+    final photo = PhotometricInterpretationX.parse(
+      widget.dataset.photometricInterpretation,
+    );
+    return photo.isMonochrome;
+  }
+
+  String get _colorModeLabel {
+    final photo = PhotometricInterpretationX.parse(
+      widget.dataset.photometricInterpretation,
+    );
+    switch (photo) {
+      case PhotometricInterpretation.paletteColor:
+        return 'Color: Palette LUT';
+      case PhotometricInterpretation.rgb:
+        return 'Color: RGB';
+      case PhotometricInterpretation.ybrFull:
+        return 'Color: YBR';
+      default:
+        return 'Color: ${widget.dataset.photometricInterpretation}';
+    }
+  }
+
   void _onPanUpdate(DragUpdateDetails details) {
+    if (!_isMonochrome) return;
+
     setState(() {
       _windowWidth += details.delta.dx * widget.sensitivity;
       _windowCenter -= details.delta.dy * widget.sensitivity;
@@ -188,11 +214,17 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
   }
 
   void resetWindowing() {
-    setState(() {
-      _initWindowing();
-      _transformationController.value = Matrix4.identity();
-    });
-    unawaited(_renderImage());
+    if (_isMonochrome) {
+      setState(() {
+        _initWindowing();
+        _transformationController.value = Matrix4.identity();
+      });
+      unawaited(_renderImage());
+    } else {
+      setState(() {
+        _transformationController.value = Matrix4.identity();
+      });
+    }
   }
 
   int _lastTapTime = 0;
@@ -368,23 +400,35 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
                       shadows: [Shadow(blurRadius: 4, color: Colors.black)],
                     ),
                   ),
-                  Text(
-                    'WC: ${_windowCenter.round()}  WW: ${_windowWidth.round()}',
-                    style: const TextStyle(
-                      color: Colors.greenAccent,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                  if (_isMonochrome) ...[
+                    Text(
+                      'WC: ${_windowCenter.round()}  WW: ${_windowWidth.round()}',
+                      style: const TextStyle(
+                        color: Colors.greenAccent,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                      ),
                     ),
-                  ),
-                  const Text(
-                    'Drag to adjust contrast / brightness',
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 10,
-                      fontStyle: FontStyle.italic,
+                    const Text(
+                      'Drag to adjust contrast / brightness',
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 10,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
-                  ),
+                  ] else ...[
+                    Text(
+                      _colorModeLabel,
+                      style: const TextStyle(
+                        color: Colors.cyanAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

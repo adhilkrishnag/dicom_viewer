@@ -9,6 +9,8 @@ import '../parsing/tag.dart';
 import '../parsing/transfer_syntax.dart';
 import '../pixel_data/pixel_data_decoder.dart';
 import '../pixel_data/pixel_data_info.dart';
+import '../windowing/palette_color_lut.dart';
+import '../windowing/photometric.dart';
 import '../windowing/windowing.dart';
 
 /// Renderer converting DICOM Datasets to raw RGBA buffers and Flutter [ui.Image]s.
@@ -173,6 +175,14 @@ class DicomRenderer {
     final wc = windowCenter ?? dataset.windowCenter ?? 128.0;
     final ww = windowWidth ?? dataset.windowWidth ?? 256.0;
 
+    PaletteColorLut? paletteLut;
+    final photo = PhotometricInterpretationX.parse(
+      info.photometricInterpretation,
+    );
+    if (photo == PhotometricInterpretation.paletteColor) {
+      paletteLut = PaletteColorLut.fromDataset(dataset);
+    }
+
     return Windowing.processPixelData(
       rawPixels,
       info,
@@ -180,6 +190,7 @@ class DicomRenderer {
       windowWidth: ww,
       rescaleSlope: dataset.rescaleSlope,
       rescaleIntercept: dataset.rescaleIntercept,
+      paletteLut: paletteLut,
     );
   }
 

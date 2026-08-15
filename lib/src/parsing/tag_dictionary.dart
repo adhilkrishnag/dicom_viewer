@@ -295,6 +295,80 @@ class TagDictionary {
       keyword: 'WindowWidth',
     ),
 
+    // Palette Color Lookup Table
+    DicomTag.redPaletteColorLookupTableDescriptor: const TagInfo(
+      tag: DicomTag.redPaletteColorLookupTableDescriptor,
+      name: 'Red Palette Color Lookup Table Descriptor',
+      vr: ValueRepresentation.us,
+      keyword: 'RedPaletteColorLookupTableDescriptor',
+    ),
+    DicomTag.greenPaletteColorLookupTableDescriptor: const TagInfo(
+      tag: DicomTag.greenPaletteColorLookupTableDescriptor,
+      name: 'Green Palette Color Lookup Table Descriptor',
+      vr: ValueRepresentation.us,
+      keyword: 'GreenPaletteColorLookupTableDescriptor',
+    ),
+    DicomTag.bluePaletteColorLookupTableDescriptor: const TagInfo(
+      tag: DicomTag.bluePaletteColorLookupTableDescriptor,
+      name: 'Blue Palette Color Lookup Table Descriptor',
+      vr: ValueRepresentation.us,
+      keyword: 'BluePaletteColorLookupTableDescriptor',
+    ),
+    DicomTag.redPaletteColorLookupTableData: const TagInfo(
+      tag: DicomTag.redPaletteColorLookupTableData,
+      name: 'Red Palette Color Lookup Table Data',
+      vr: ValueRepresentation.ow,
+      keyword: 'RedPaletteColorLookupTableData',
+    ),
+    DicomTag.greenPaletteColorLookupTableData: const TagInfo(
+      tag: DicomTag.greenPaletteColorLookupTableData,
+      name: 'Green Palette Color Lookup Table Data',
+      vr: ValueRepresentation.ow,
+      keyword: 'GreenPaletteColorLookupTableData',
+    ),
+    DicomTag.bluePaletteColorLookupTableData: const TagInfo(
+      tag: DicomTag.bluePaletteColorLookupTableData,
+      name: 'Blue Palette Color Lookup Table Data',
+      vr: ValueRepresentation.ow,
+      keyword: 'BluePaletteColorLookupTableData',
+    ),
+    DicomTag.segmentedRedPaletteColorLookupTableData: const TagInfo(
+      tag: DicomTag.segmentedRedPaletteColorLookupTableData,
+      name: 'Segmented Red Palette Color Lookup Table Data',
+      vr: ValueRepresentation.ow,
+      keyword: 'SegmentedRedPaletteColorLookupTableData',
+    ),
+    DicomTag.segmentedGreenPaletteColorLookupTableData: const TagInfo(
+      tag: DicomTag.segmentedGreenPaletteColorLookupTableData,
+      name: 'Segmented Green Palette Color Lookup Table Data',
+      vr: ValueRepresentation.ow,
+      keyword: 'SegmentedGreenPaletteColorLookupTableData',
+    ),
+    DicomTag.segmentedBluePaletteColorLookupTableData: const TagInfo(
+      tag: DicomTag.segmentedBluePaletteColorLookupTableData,
+      name: 'Segmented Blue Palette Color Lookup Table Data',
+      vr: ValueRepresentation.ow,
+      keyword: 'SegmentedBluePaletteColorLookupTableData',
+    ),
+    DicomTag.alphaPaletteColorLookupTableDescriptor: const TagInfo(
+      tag: DicomTag.alphaPaletteColorLookupTableDescriptor,
+      name: 'Alpha Palette Color Lookup Table Descriptor',
+      vr: ValueRepresentation.us,
+      keyword: 'AlphaPaletteColorLookupTableDescriptor',
+    ),
+    DicomTag.alphaPaletteColorLookupTableData: const TagInfo(
+      tag: DicomTag.alphaPaletteColorLookupTableData,
+      name: 'Alpha Palette Color Lookup Table Data',
+      vr: ValueRepresentation.ow,
+      keyword: 'AlphaPaletteColorLookupTableData',
+    ),
+    DicomTag.enhancedPaletteColorLookupTableSequence: const TagInfo(
+      tag: DicomTag.enhancedPaletteColorLookupTableSequence,
+      name: 'Enhanced Palette Color Lookup Table Sequence',
+      vr: ValueRepresentation.sq,
+      keyword: 'EnhancedPaletteColorLookupTableSequence',
+    ),
+
     // Sequence Tags
     DicomTag.referencedStudySequence: const TagInfo(
       tag: DicomTag.referencedStudySequence,

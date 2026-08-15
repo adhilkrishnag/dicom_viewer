@@ -28,6 +28,21 @@ class SyntheticDicomGenerator {
     int samplesPerPixel = 1,
     int planarConfiguration = 0,
     Uint8List? customRgbBytes,
+    Uint8List? customPixelData,
+    List<int>? redDescriptor,
+    List<int>? greenDescriptor,
+    List<int>? blueDescriptor,
+    Uint8List? redLutData,
+    Uint8List? greenLutData,
+    Uint8List? blueLutData,
+    Uint8List? rawRedDescriptorBytes,
+    Uint8List? rawGreenDescriptorBytes,
+    Uint8List? rawBlueDescriptorBytes,
+    String descriptorVr = 'US',
+    Uint8List? segmentedRedLutData,
+    Uint8List? segmentedGreenLutData,
+    Uint8List? segmentedBlueLutData,
+    bool hasEnhancedPaletteSequence = false,
   }) {
     final builder = BytesBuilder();
 
@@ -73,6 +88,23 @@ class SyntheticDicomGenerator {
     void writeUint16(int group, int element, int val) {
       final bd = ByteData(2)..setUint16(0, val, Endian.little);
       writeElement(group, element, 'US', bd.buffer.asUint8List());
+    }
+
+    void writeDescriptor(
+      int group,
+      int element,
+      List<int> desc, {
+      String vr = 'US',
+    }) {
+      final bd = ByteData(desc.length * 2);
+      for (int i = 0; i < desc.length; i++) {
+        if (vr == 'SS') {
+          bd.setInt16(i * 2, desc[i], Endian.little);
+        } else {
+          bd.setUint16(i * 2, desc[i], Endian.little);
+        }
+      }
+      writeElement(group, element, vr, bd.buffer.asUint8List());
     }
 
     // Group 0002 File Meta Info
@@ -126,6 +158,50 @@ class SyntheticDicomGenerator {
       );
     }
 
+    // Palette Color LUT Descriptors & Data
+    if (rawRedDescriptorBytes != null) {
+      writeElement(0x0028, 0x1101, descriptorVr, rawRedDescriptorBytes);
+    } else if (redDescriptor != null) {
+      writeDescriptor(0x0028, 0x1101, redDescriptor, vr: descriptorVr);
+    }
+
+    if (rawGreenDescriptorBytes != null) {
+      writeElement(0x0028, 0x1102, descriptorVr, rawGreenDescriptorBytes);
+    } else if (greenDescriptor != null) {
+      writeDescriptor(0x0028, 0x1102, greenDescriptor, vr: descriptorVr);
+    }
+
+    if (rawBlueDescriptorBytes != null) {
+      writeElement(0x0028, 0x1103, descriptorVr, rawBlueDescriptorBytes);
+    } else if (blueDescriptor != null) {
+      writeDescriptor(0x0028, 0x1103, blueDescriptor, vr: descriptorVr);
+    }
+
+    if (redLutData != null) {
+      writeElement(0x0028, 0x1201, 'OW', redLutData);
+    }
+    if (greenLutData != null) {
+      writeElement(0x0028, 0x1202, 'OW', greenLutData);
+    }
+    if (blueLutData != null) {
+      writeElement(0x0028, 0x1203, 'OW', blueLutData);
+    }
+
+    if (segmentedRedLutData != null) {
+      writeElement(0x0028, 0x1221, 'OW', segmentedRedLutData);
+    }
+    if (segmentedGreenLutData != null) {
+      writeElement(0x0028, 0x1222, 'OW', segmentedGreenLutData);
+    }
+    if (segmentedBlueLutData != null) {
+      writeElement(0x0028, 0x1223, 'OW', segmentedBlueLutData);
+    }
+
+    if (hasEnhancedPaletteSequence) {
+      // Empty sequence item
+      writeElement(0x0028, 0x140B, 'SQ', Uint8List(0));
+    }
+
     // Group 7FE0 Pixel Data
     if (rawEncapsulatedBytes != null) {
       // Write Encapsulated Pixel Data (OB, undefined length 0xFFFFFFFF)
@@ -163,6 +239,13 @@ class SyntheticDicomGenerator {
       seqDelim.setUint16(2, 0xE0DD, Endian.little);
       seqDelim.setUint32(4, 0, Endian.little);
       builder.add(seqDelim.buffer.asUint8List());
+    } else if (customPixelData != null) {
+      writeElement(
+        0x7FE0,
+        0x0010,
+        bitsAllocated == 8 ? 'OB' : 'OW',
+        customPixelData,
+      );
     } else if (customRgbBytes != null) {
       writeElement(0x7FE0, 0x0010, 'OB', customRgbBytes);
     } else {

@@ -105,6 +105,56 @@ class DicomTag implements Comparable<DicomTag> {
   static const DicomTag windowWidth = DicomTag(0x0028, 0x1051);
   static const DicomTag windowCenterWidthExplanation = DicomTag(0x0028, 0x1055);
 
+  // Group 0028 - Palette Color Lookup Table
+  static const DicomTag redPaletteColorLookupTableDescriptor = DicomTag(
+    0x0028,
+    0x1101,
+  );
+  static const DicomTag greenPaletteColorLookupTableDescriptor = DicomTag(
+    0x0028,
+    0x1102,
+  );
+  static const DicomTag bluePaletteColorLookupTableDescriptor = DicomTag(
+    0x0028,
+    0x1103,
+  );
+  static const DicomTag redPaletteColorLookupTableData = DicomTag(
+    0x0028,
+    0x1201,
+  );
+  static const DicomTag greenPaletteColorLookupTableData = DicomTag(
+    0x0028,
+    0x1202,
+  );
+  static const DicomTag bluePaletteColorLookupTableData = DicomTag(
+    0x0028,
+    0x1203,
+  );
+  static const DicomTag segmentedRedPaletteColorLookupTableData = DicomTag(
+    0x0028,
+    0x1221,
+  );
+  static const DicomTag segmentedGreenPaletteColorLookupTableData = DicomTag(
+    0x0028,
+    0x1222,
+  );
+  static const DicomTag segmentedBluePaletteColorLookupTableData = DicomTag(
+    0x0028,
+    0x1223,
+  );
+  static const DicomTag alphaPaletteColorLookupTableDescriptor = DicomTag(
+    0x0028,
+    0x1104,
+  );
+  static const DicomTag alphaPaletteColorLookupTableData = DicomTag(
+    0x0028,
+    0x1204,
+  );
+  static const DicomTag enhancedPaletteColorLookupTableSequence = DicomTag(
+    0x0028,
+    0x140B,
+  );
+
   // Sequences
   static const DicomTag referencedStudySequence = DicomTag(0x0008, 0x1110);
   static const DicomTag referencedSeriesSequence = DicomTag(0x0008, 0x1115);
