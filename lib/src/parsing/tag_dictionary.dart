@@ -3,6 +3,7 @@ import 'value_representation.dart';
 
 /// Tag definition metadata.
 class TagInfo {
+  /// Creates a [TagInfo] dictionary entry.
   const TagInfo({
     required this.tag,
     required this.name,
@@ -10,9 +11,16 @@ class TagInfo {
     this.keyword = '',
   });
 
+  /// DICOM Data Element Tag.
   final DicomTag tag;
+
+  /// Human-readable standard attribute name.
   final String name;
+
+  /// Standard Value Representation (VR).
   final ValueRepresentation vr;
+
+  /// Standard DICOM keyword (e.g., 'PatientName').
   final String keyword;
 }
 

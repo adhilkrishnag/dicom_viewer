@@ -38,6 +38,7 @@ class _LutDescriptor {
 
 /// Internal helper for decoding and indexing DICOM PALETTE COLOR Lookup Tables (PS3.3 C.7.6.3.1.5).
 class PaletteColorLut {
+  /// Creates a [PaletteColorLut] with decoded lookup table buffers.
   PaletteColorLut({
     required this.numberOfEntries,
     required this.firstMappedValue,

@@ -7,6 +7,7 @@ import 'value_representation.dart';
 
 /// Represents a single DICOM Data Element containing tag, VR, length, and raw bytes.
 class DicomDataElement {
+  /// Creates a [DicomDataElement] with the specified tag, VR, value length, and value bytes.
   const DicomDataElement({
     required this.tag,
     required this.vr,
@@ -16,11 +17,22 @@ class DicomDataElement {
     this.encapsulatedData,
   });
 
+  /// DICOM Data Element Tag (Group, Element).
   final DicomTag tag;
+
+  /// Value Representation (VR).
   final ValueRepresentation vr;
+
+  /// Value length in bytes (or 0 for undefined length).
   final int valueLength;
+
+  /// Raw value bytes.
   final Uint8List valueBytes;
+
+  /// Whether the value was parsed using Little Endian byte ordering.
   final bool isLittleEndian;
+
+  /// Optional encapsulated pixel data payload for compressed/fragmented pixel data.
   final EncapsulatedPixelData? encapsulatedData;
 
   /// Interpret value as string.

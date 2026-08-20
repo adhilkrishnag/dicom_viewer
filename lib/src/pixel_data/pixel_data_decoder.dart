@@ -4,6 +4,7 @@ import 'pixel_data_info.dart';
 
 /// Raw DICOM Pixel Data decoder for uncompressed explicit/implicit transfer syntaxes.
 class PixelDataDecoder {
+  /// Creates a [PixelDataDecoder] instance.
   const PixelDataDecoder();
 
   /// Decodes raw DICOM bytes into an array of scalar pixel values.

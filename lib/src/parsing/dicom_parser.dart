@@ -10,6 +10,7 @@ import 'value_representation.dart';
 
 /// Robust Pure-Dart DICOM File & Dataset Parser adhering to DICOM Part 10 (PS3.10) & Part 5 (PS3.5).
 class DicomParser {
+  /// Creates a [DicomParser] instance.
   const DicomParser();
 
   /// Parse binary DICOM bytes into a list of [DicomDataElement].

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 /// Internal-only descriptor for an encapsulated sequence item fragment.
 class InternalFragment {
+  /// Creates an [InternalFragment] descriptor.
   const InternalFragment({
     required this.index,
     required this.relativeTagStart,
@@ -23,6 +24,7 @@ class InternalFragment {
 /// Stores Basic Offset Table uint32 offsets and sequence item fragments.
 /// NOT exported in `lib/dicom_viewer.dart`.
 class EncapsulatedPixelData {
+  /// Creates an [EncapsulatedPixelData] container with [botOffsets] and [fragments].
   EncapsulatedPixelData({required this.botOffsets, required this.fragments});
 
   /// uint32 offsets extracted from Basic Offset Table (Item #0).

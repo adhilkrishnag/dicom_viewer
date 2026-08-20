@@ -1,38 +1,100 @@
-/// Value Representations (VR) in DICOM PS3.5.
+/// Value Representations (VR) in DICOM PS3.5 Section 6.2.
 enum ValueRepresentation {
-  ae, // Application Entity
-  as, // Age String
-  at, // Attribute Tag
-  cs, // Code String
-  da, // Date
-  ds, // Decimal String
-  dt, // Date Time
-  fl, // Floating Point Single (4 bytes)
-  fd, // Floating Point Double (8 bytes)
-  isVR, // Integer String ("is" reserved keyword in Dart)
-  lo, // Long String
-  lt, // Long Text
-  ob, // Other Byte
-  od, // Other Double
-  of, // Other Float
-  ol, // Other Long
-  ow, // Other Word
-  pn, // Person Name
-  sh, // Short String
-  sl, // Signed Long
-  ss, // Signed Short
-  st, // Short Text
-  tm, // Time
-  uc, // Unlimited Characters
-  ui, // Unique Identifier (UID)
-  ul, // Unsigned Long
-  un, // Unknown
-  us, // Unsigned Short
-  ut, // Unlimited Text
-  sq, // Sequence of Items
+  /// Application Entity (16 bytes max).
+  ae,
+
+  /// Age String (4 bytes fixed, e.g., '018M').
+  as,
+
+  /// Attribute Tag (4 bytes fixed, 16-bit group + 16-bit element).
+  at,
+
+  /// Code String (16 bytes max).
+  cs,
+
+  /// Date (8 bytes fixed, YYYYMMDD).
+  da,
+
+  /// Decimal String (16 bytes max).
+  ds,
+
+  /// Date Time (26 bytes max, YYYYMMDDHHMMSS.FFFFFF&ZZXX).
+  dt,
+
+  /// Floating Point Single (4 bytes fixed, IEEE 754:1985 32-bit).
+  fl,
+
+  /// Floating Point Double (8 bytes fixed, IEEE 754:1985 64-bit).
+  fd,
+
+  /// Integer String (12 bytes max, named `isVR` because `is` is a Dart keyword).
+  isVR,
+
+  /// Long String (64 chars max).
+  lo,
+
+  /// Long Text (10240 chars max).
+  lt,
+
+  /// Other Byte (byte string).
+  ob,
+
+  /// Other Double (64-bit floating point words).
+  od,
+
+  /// Other Float (32-bit floating point words).
+  of,
+
+  /// Other Long (32-bit signed/unsigned words).
+  ol,
+
+  /// Other Word (16-bit words).
+  ow,
+
+  /// Person Name (64 chars max per component group).
+  pn,
+
+  /// Short String (16 chars max).
+  sh,
+
+  /// Signed Long (4 bytes fixed, 32-bit 2's complement).
+  sl,
+
+  /// Signed Short (2 bytes fixed, 16-bit 2's complement).
+  ss,
+
+  /// Short Text (1024 chars max).
+  st,
+
+  /// Time (14 bytes max, HHMMSS.FFFFFF).
+  tm,
+
+  /// Unlimited Characters (2^32-2 bytes max).
+  uc,
+
+  /// Unique Identifier / UID (64 bytes max).
+  ui,
+
+  /// Unsigned Long (4 bytes fixed, 32-bit unsigned int).
+  ul,
+
+  /// Unknown (any byte string, used when VR is not defined).
+  un,
+
+  /// Unsigned Short (2 bytes fixed, 16-bit unsigned int).
+  us,
+
+  /// Unlimited Text (2^32-2 bytes max).
+  ut,
+
+  /// Sequence of Items (contains nested data sets).
+  sq,
+
+  /// Unknown / unparsed VR code.
   unknown,
 }
 
+/// Extension providing utility accessors and parsing for [ValueRepresentation].
 extension ValueRepresentationX on ValueRepresentation {
   /// Two-character VR code string (e.g., 'DS', 'OW').
   String get code {

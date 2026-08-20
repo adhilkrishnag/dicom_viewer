@@ -18,6 +18,7 @@ enum DicomTool {
 /// Interactive Flutter widget that renders a DICOM image and provides real-time
 /// windowing (contrast/brightness) drag gestures.
 class DicomImageWidget extends StatefulWidget {
+  /// Creates an interactive [DicomImageWidget] for viewing DICOM imagery.
   const DicomImageWidget({
     super.key,
     required this.dataset,

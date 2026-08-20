@@ -36,6 +36,7 @@ class TransferSyntax {
 
 /// Metadata about a Transfer Syntax configuration.
 class TransferSyntaxDetails {
+  /// Creates a [TransferSyntaxDetails] configuration descriptor.
   const TransferSyntaxDetails({
     required this.uid,
     required this.name,
@@ -44,12 +45,22 @@ class TransferSyntaxDetails {
     required this.isEncapsulated,
   });
 
+  /// Transfer Syntax Unique Identifier (UID).
   final String uid;
+
+  /// Human-readable Transfer Syntax name.
   final String name;
+
+  /// Whether Data Elements use Explicit VR encoding (true) or Implicit VR (false).
   final bool isExplicitVR;
+
+  /// Whether Data Elements use Little Endian byte ordering (true) or Big Endian (false).
   final bool isLittleEndian;
+
+  /// Whether pixel data is encapsulated/compressed in sequence items (true) or native flat buffer (false).
   final bool isEncapsulated;
 
+  /// Resolves a Transfer Syntax UID string to its corresponding [TransferSyntaxDetails].
   static TransferSyntaxDetails fromUid(String uid) {
     final cleanUid = uid.trim().replaceAll('\x00', '');
     switch (cleanUid) {
