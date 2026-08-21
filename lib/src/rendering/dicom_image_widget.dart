@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
+import '../geometry/dicom_image_geometry.dart';
 import '../parsing/dicom_dataset.dart';
 import '../windowing/photometric.dart';
 import 'dicom_renderer.dart';
@@ -246,34 +247,14 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
   /// - Index 0: Row Spacing (vertical distance between adjacent row centers, $S_y$, in mm).
   /// - Index 1: Column Spacing (horizontal distance between adjacent column centers, $S_x$, in mm).
   ///
-  /// Physical display aspect ratio is calculated as:
+  /// Physical display aspect ratio is calculated via [DicomImageGeometry]:
   /// `(columns * columnSpacing) / (rows * rowSpacing)`
   ///
   /// If [pixelSpacing] is null, does not contain exactly 2 values, has values <= 0,
   /// contains non-finite numbers, or image dimensions are invalid (rows/cols <= 0),
   /// it safely falls back to native matrix aspect ratio: `columns / rows`.
-  double get _displayAspectRatio {
-    final cols = widget.dataset.columns;
-    final rows = widget.dataset.rows;
-    if (cols <= 0 || rows <= 0) return 1.0;
-
-    final spacing = widget.dataset.pixelSpacing;
-    if (spacing != null && spacing.length == 2) {
-      final rowSpacing = spacing[0]; // Sy (vertical)
-      final colSpacing = spacing[1]; // Sx (horizontal)
-      if (rowSpacing > 0 &&
-          colSpacing > 0 &&
-          rowSpacing.isFinite &&
-          colSpacing.isFinite) {
-        final ar = (cols * colSpacing) / (rows * rowSpacing);
-        if (ar > 0 && ar.isFinite) {
-          return ar;
-        }
-      }
-    }
-
-    return cols / rows;
-  }
+  double get _displayAspectRatio =>
+      DicomImageGeometry.fromDataset(widget.dataset).displayAspectRatio;
 
   @override
   Widget build(BuildContext context) {
