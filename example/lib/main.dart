@@ -337,6 +337,14 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                               style: TextStyle(fontSize: 11),
                             ),
                           ),
+                          ButtonSegment<DicomTool>(
+                            value: DicomTool.measure,
+                            icon: Icon(Icons.straighten, size: 14),
+                            label: Text(
+                              'Measure',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                          ),
                         ],
                         selected: {_selectedTool},
                         onSelectionChanged: (newSelection) {
@@ -550,11 +558,16 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                                       ? 'Legacy Windowing Mode:'
                                       : _selectedTool == DicomTool.pan
                                       ? 'Interactive Pan & Zoom Tool:'
-                                      : 'Interactive Windowing Tool:',
-                                  style: const TextStyle(
+                                      : _selectedTool == DicomTool.windowing
+                                      ? 'Interactive Windowing Tool:'
+                                      : 'Interactive Measurement Tool:',
+                                  style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.cyanAccent,
+                                    color:
+                                        _selectedTool == DicomTool.measure
+                                            ? Colors.yellowAccent
+                                            : Colors.cyanAccent,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -567,12 +580,20 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                                         color: Colors.white70,
                                       ),
                                     )
-                                  else
+                                  else if (_selectedTool == DicomTool.windowing)
                                     const Text(
                                       '🖐️ Drag: Adjust Contrast / Brightness',
                                       style: TextStyle(
                                         fontSize: 10,
                                         color: Colors.white70,
+                                      ),
+                                    )
+                                  else
+                                    const Text(
+                                      '📏 Drag: Draw 2D Distance Caliper Line',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.yellowAccent,
                                       ),
                                     ),
                                   const Text(

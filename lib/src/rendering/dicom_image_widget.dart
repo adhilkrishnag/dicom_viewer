@@ -3,6 +3,9 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../geometry/dicom_image_geometry.dart';
+import '../geometry/distance_measurement.dart';
+import '../geometry/distance_measurement_painter.dart';
+import '../geometry/image_coordinate_transform.dart';
 import '../parsing/dicom_dataset.dart';
 import '../windowing/photometric.dart';
 import 'dicom_renderer.dart';
@@ -14,6 +17,9 @@ enum DicomTool {
 
   /// Drag gestures adjust Window Center (brightness) and Window Width (contrast).
   windowing,
+
+  /// Drag gestures draw a 2D two-point distance measurement caliper line across the image.
+  measure,
 }
 
 /// Interactive Flutter widget that renders a DICOM image and provides real-time
@@ -81,6 +87,15 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
 
   late TransformationController _transformationController;
 
+  /// Stored completed distance measurements per frame index.
+  final Map<int, DicomDistanceMeasurement> _measurements = {};
+
+  /// In-progress distance measurement currently being dragged on the active frame.
+  DicomDistanceMeasurement? _inProgressMeasurement;
+
+  /// Viewport position where the current measurement drag gesture started.
+  Offset? _measureDragStartViewport;
+
   @override
   void initState() {
     super.initState();
@@ -96,8 +111,13 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     if (oldWidget.dataset != widget.dataset) {
       _initWindowing();
       _transformationController.value = Matrix4.identity();
+      _measurements.clear();
+      _inProgressMeasurement = null;
+      _measureDragStartViewport = null;
       _renderImage();
     } else if (oldWidget.frameIndex != widget.frameIndex) {
+      _inProgressMeasurement = null;
+      _measureDragStartViewport = null;
       _renderImage();
     }
   }
@@ -117,6 +137,9 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     final scale = matrix.getMaxScaleOnAxis();
     final translation = Offset(matrix.storage[12], matrix.storage[13]);
     widget.onViewChanged?.call(scale, translation);
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _initWindowing() {
@@ -215,16 +238,76 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     unawaited(_renderImage());
   }
 
+  void _onMeasurePanStart(
+    DragStartDetails details,
+    ImageCoordinateTransform transform,
+  ) {
+    final startPoint = transform.viewportToImage(details.localPosition);
+    _measureDragStartViewport = details.localPosition;
+
+    setState(() {
+      _inProgressMeasurement = DicomDistanceMeasurement.fromPoints(
+        start: startPoint,
+        end: startPoint,
+        frameIndex: widget.frameIndex,
+        geometry: transform.geometry,
+      );
+    });
+  }
+
+  void _onMeasurePanUpdate(
+    DragUpdateDetails details,
+    ImageCoordinateTransform transform,
+  ) {
+    if (_measureDragStartViewport == null) return;
+
+    final startPoint = transform.viewportToImage(_measureDragStartViewport!);
+    final currentPoint = transform.viewportToImage(details.localPosition);
+
+    setState(() {
+      _inProgressMeasurement = DicomDistanceMeasurement.fromPoints(
+        start: startPoint,
+        end: currentPoint,
+        frameIndex: widget.frameIndex,
+        geometry: transform.geometry,
+      );
+    });
+  }
+
+  void _onMeasurePanEnd(
+    DragEndDetails details,
+    ImageCoordinateTransform transform,
+  ) {
+    if (_inProgressMeasurement != null && _inProgressMeasurement!.isValid) {
+      _measurements[widget.frameIndex] = _inProgressMeasurement!;
+    }
+    setState(() {
+      _inProgressMeasurement = null;
+      _measureDragStartViewport = null;
+    });
+  }
+
+  void _onMeasurePanCancel() {
+    setState(() {
+      _inProgressMeasurement = null;
+      _measureDragStartViewport = null;
+    });
+  }
+
   void resetWindowing() {
     if (_isMonochrome) {
       setState(() {
         _initWindowing();
         _transformationController.value = Matrix4.identity();
+        _inProgressMeasurement = null;
+        _measureDragStartViewport = null;
       });
       unawaited(_renderImage());
     } else {
       setState(() {
         _transformationController.value = Matrix4.identity();
+        _inProgressMeasurement = null;
+        _measureDragStartViewport = null;
       });
     }
   }
@@ -258,165 +341,242 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
 
   @override
   Widget build(BuildContext context) {
-    Widget imageContent = Center(
-      child:
-          _renderedImage != null
-              ? AspectRatio(
-                aspectRatio: _displayAspectRatio,
-                child: RawImage(
-                  image: _renderedImage,
-                  fit: BoxFit.fill,
-                  filterQuality: FilterQuality.medium,
-                ),
-              )
-              : Container(),
-    );
-
-    if (widget.enableZoom) {
-      if (widget.tool == DicomTool.pan) {
-        imageContent = InteractiveViewer(
-          transformationController: _transformationController,
-          panEnabled: true,
-          scaleEnabled: true,
-          minScale: 0.5,
-          maxScale: 5.0,
-          child: imageContent,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewportSize = Size(
+          constraints.maxWidth.isFinite ? constraints.maxWidth : 0.0,
+          constraints.maxHeight.isFinite ? constraints.maxHeight : 0.0,
         );
-      } else {
-        imageContent = ClipRect(
-          child: Transform(
-            transform: _transformationController.value,
-            child: imageContent,
-          ),
+        final geometry = DicomImageGeometry.fromDataset(widget.dataset);
+        final transform = ImageCoordinateTransform(
+          geometry: geometry,
+          viewportSize: viewportSize,
+          transformMatrix:
+              widget.enableZoom ? _transformationController.value : null,
         );
-      }
-    }
 
-    return Container(
-      color: Colors.black,
-      child: Stack(
-        children: [
-          // Image canvas with gesture handling
-          Positioned.fill(
-            child: GestureDetector(
-              key: const Key('dicom_windowing_gesture'),
-              onPanUpdate:
-                  (widget.enableZoom && widget.tool == DicomTool.pan)
-                      ? null
-                      : _onPanUpdate,
-              onTapDown: _onTapDown,
-              behavior: HitTestBehavior.opaque,
+        final activeMeasurement =
+            _inProgressMeasurement ?? _measurements[widget.frameIndex];
+
+        Widget imageContent = Center(
+          child:
+              _renderedImage != null
+                  ? AspectRatio(
+                    aspectRatio: _displayAspectRatio,
+                    child: RawImage(
+                      image: _renderedImage,
+                      fit: BoxFit.fill,
+                      filterQuality: FilterQuality.medium,
+                    ),
+                  )
+                  : Container(),
+        );
+
+        if (widget.enableZoom) {
+          if (widget.tool == DicomTool.pan) {
+            imageContent = InteractiveViewer(
+              transformationController: _transformationController,
+              panEnabled: true,
+              scaleEnabled: true,
+              minScale: 0.5,
+              maxScale: 5.0,
               child: imageContent,
-            ),
-          ),
+            );
+          } else {
+            imageContent = ClipRect(
+              child: Transform(
+                transform: _transformationController.value,
+                child: imageContent,
+              ),
+            );
+          }
+        }
 
-          // Loading Indicator
-          if (_isLoading)
-            const Center(
-              child: CircularProgressIndicator(color: Colors.cyanAccent),
-            ),
+        final GestureDragStartCallback? panStart;
+        final GestureDragUpdateCallback? panUpdate;
+        final GestureDragEndCallback? panEnd;
+        final GestureDragCancelCallback? panCancel;
 
-          // Error Display
-          if (_errorMessage != null)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  'Error rendering image:\n$_errorMessage',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.redAccent, fontSize: 14),
+        if (widget.tool == DicomTool.measure) {
+          panStart = (details) => _onMeasurePanStart(details, transform);
+          panUpdate = (details) => _onMeasurePanUpdate(details, transform);
+          panEnd = (details) => _onMeasurePanEnd(details, transform);
+          panCancel = _onMeasurePanCancel;
+        } else if (widget.tool == DicomTool.windowing || !widget.enableZoom) {
+          panStart = null;
+          panUpdate = _onPanUpdate;
+          panEnd = null;
+          panCancel = null;
+        } else {
+          // DicomTool.pan with enableZoom == true -> handled by InteractiveViewer
+          panStart = null;
+          panUpdate = null;
+          panEnd = null;
+          panCancel = null;
+        }
+
+        return Container(
+          color: Colors.black,
+          child: Stack(
+            children: [
+              // Image canvas with gesture handling
+              Positioned.fill(
+                child: GestureDetector(
+                  key: const Key('dicom_windowing_gesture'),
+                  onPanStart: panStart,
+                  onPanUpdate: panUpdate,
+                  onPanEnd: panEnd,
+                  onPanCancel: panCancel,
+                  onTapDown: _onTapDown,
+                  behavior: HitTestBehavior.opaque,
+                  child: imageContent,
                 ),
               ),
-            ),
 
-          // Medical Overlay
-          if (widget.showOverlay && !_isLoading && _errorMessage == null) ...[
-            // Top-left: Patient & Study Info
-            Positioned(
-              top: 12,
-              left: 12,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.dataset.patientName,
-                    style: const TextStyle(
-                      color: Colors.cyanAccent,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+              // Distance Measurement Overlay
+              if (viewportSize.width > 0 && viewportSize.height > 0)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      size: viewportSize,
+                      painter: DistanceMeasurementPainter(
+                        measurement: activeMeasurement,
+                        transform: transform,
+                      ),
                     ),
                   ),
-                  Text(
-                    'ID: ${widget.dataset.patientId}',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                      shadows: [Shadow(blurRadius: 4, color: Colors.black)],
-                    ),
-                  ),
-                  Text(
-                    'Modality: ${widget.dataset.modality}',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                      shadows: [Shadow(blurRadius: 4, color: Colors.black)],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+                ),
 
-            // Bottom-left: Image dimensions & Windowing state
-            Positioned(
-              bottom: 12,
-              left: 12,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Size: ${widget.dataset.columns} x ${widget.dataset.rows}',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                      shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+              // Loading Indicator
+              if (_isLoading)
+                const Center(
+                  child: CircularProgressIndicator(color: Colors.cyanAccent),
+                ),
+
+              // Error Display
+              if (_errorMessage != null)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      'Error rendering image:\n$_errorMessage',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
-                  if (_isMonochrome) ...[
-                    Text(
-                      'WC: ${_windowCenter.round()}  WW: ${_windowWidth.round()}',
-                      style: const TextStyle(
-                        color: Colors.greenAccent,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                ),
+
+              // Medical Overlay
+              if (widget.showOverlay &&
+                  !_isLoading &&
+                  _errorMessage == null) ...[
+                // Top-left: Patient & Study Info
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.dataset.patientName,
+                        style: const TextStyle(
+                          color: Colors.cyanAccent,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                        ),
                       ),
-                    ),
-                    const Text(
-                      'Drag to adjust contrast / brightness',
-                      style: TextStyle(
-                        color: Colors.white54,
-                        fontSize: 10,
-                        fontStyle: FontStyle.italic,
+                      Text(
+                        'ID: ${widget.dataset.patientId}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                        ),
                       ),
-                    ),
-                  ] else ...[
-                    Text(
-                      _colorModeLabel,
-                      style: const TextStyle(
-                        color: Colors.cyanAccent,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                      Text(
+                        'Modality: ${widget.dataset.modality}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                        ),
                       ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
+                    ],
+                  ),
+                ),
+
+                // Bottom-left: Image dimensions & Windowing state
+                Positioned(
+                  bottom: 12,
+                  left: 12,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Size: ${widget.dataset.columns} x ${widget.dataset.rows}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                        ),
+                      ),
+                      if (widget.tool == DicomTool.measure) ...[
+                        const Text(
+                          'Tool: Measure (Drag across image to measure distance)',
+                          style: TextStyle(
+                            color: Colors.yellowAccent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            shadows: [
+                              Shadow(blurRadius: 4, color: Colors.black),
+                            ],
+                          ),
+                        ),
+                      ] else if (_isMonochrome) ...[
+                        Text(
+                          'WC: ${_windowCenter.round()}  WW: ${_windowWidth.round()}',
+                          style: const TextStyle(
+                            color: Colors.greenAccent,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            shadows: [
+                              Shadow(blurRadius: 4, color: Colors.black),
+                            ],
+                          ),
+                        ),
+                        const Text(
+                          'Drag to adjust contrast / brightness',
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 10,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ] else ...[
+                        Text(
+                          _colorModeLabel,
+                          style: const TextStyle(
+                            color: Colors.cyanAccent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            shadows: [
+                              Shadow(blurRadius: 4, color: Colors.black),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }
