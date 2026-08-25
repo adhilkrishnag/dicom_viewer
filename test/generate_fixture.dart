@@ -20,6 +20,8 @@ class SyntheticDicomGenerator {
     String? windowWidthString,
     List<double>? pixelSpacing,
     String? pixelSpacingString,
+    List<int>? pixelAspectRatio,
+    String? pixelAspectRatioString,
     int? numberOfFrames,
     String patientName = 'TEST^PATIENT',
     String modality = 'CT',
@@ -155,6 +157,17 @@ class SyntheticDicomGenerator {
         0x0030,
         'DS',
         '${pixelSpacing[0]}\\${pixelSpacing[1]}',
+      );
+    }
+
+    if (pixelAspectRatioString != null) {
+      writeString(0x0028, 0x0034, 'IS', pixelAspectRatioString);
+    } else if (pixelAspectRatio != null && pixelAspectRatio.length == 2) {
+      writeString(
+        0x0028,
+        0x0034,
+        'IS',
+        '${pixelAspectRatio[0]}\\${pixelAspectRatio[1]}',
       );
     }
 
