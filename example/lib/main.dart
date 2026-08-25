@@ -345,6 +345,14 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                               style: TextStyle(fontSize: 11),
                             ),
                           ),
+                          ButtonSegment<DicomTool>(
+                            value: DicomTool.rectangleRoi,
+                            icon: Icon(Icons.crop_square, size: 14),
+                            label: Text(
+                              'Rect ROI',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                          ),
                         ],
                         selected: {_selectedTool},
                         onSelectionChanged: (newSelection) {
@@ -560,12 +568,16 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                                       ? 'Interactive Pan & Zoom Tool:'
                                       : _selectedTool == DicomTool.windowing
                                       ? 'Interactive Windowing Tool:'
+                                      : _selectedTool == DicomTool.rectangleRoi
+                                      ? 'Interactive Rectangle ROI Tool:'
                                       : 'Interactive Measurement Tool:',
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
                                     color:
-                                        _selectedTool == DicomTool.measure
+                                        (_selectedTool == DicomTool.measure ||
+                                                _selectedTool ==
+                                                    DicomTool.rectangleRoi)
                                             ? Colors.yellowAccent
                                             : Colors.cyanAccent,
                                   ),
@@ -586,6 +598,15 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                                       style: TextStyle(
                                         fontSize: 10,
                                         color: Colors.white70,
+                                      ),
+                                    )
+                                  else if (_selectedTool ==
+                                      DicomTool.rectangleRoi)
+                                    const Text(
+                                      '📐 Drag: Draw Rectangle ROI',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.yellowAccent,
                                       ),
                                     )
                                   else

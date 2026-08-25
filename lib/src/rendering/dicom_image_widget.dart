@@ -6,6 +6,8 @@ import '../geometry/dicom_image_geometry.dart';
 import '../geometry/distance_measurement.dart';
 import '../geometry/distance_measurement_painter.dart';
 import '../geometry/image_coordinate_transform.dart';
+import '../geometry/rectangle_roi_measurement.dart';
+import '../geometry/rectangle_roi_painter.dart';
 import '../parsing/dicom_dataset.dart';
 import '../windowing/photometric.dart';
 import 'dicom_renderer.dart';
@@ -20,6 +22,9 @@ enum DicomTool {
 
   /// Drag gestures draw a 2D two-point distance measurement caliper line across the image.
   measure,
+
+  /// Drag gestures draw a rectangular Region of Interest on the image.
+  rectangleRoi,
 }
 
 /// Interactive Flutter widget that renders a DICOM image and provides real-time
@@ -107,6 +112,18 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
   /// Which endpoint is currently being adjusted, or null if creating a new measurement.
   _MeasurementEndpoint? _measureDragEditingEndpoint;
 
+  /// Stored completed rectangle ROI measurements per frame index.
+  final Map<int, DicomRectangleRoiMeasurement> _roiMeasurements = {};
+
+  /// In-progress rectangle ROI currently being dragged on the active frame.
+  DicomRectangleRoiMeasurement? _inProgressRoi;
+
+  /// Viewport position where the ROI pointer down was received.
+  Offset? _roiDragDownViewport;
+
+  /// Viewport position where the ROI drag gesture started (first corner).
+  Offset? _roiDragStartViewport;
+
   @override
   void initState() {
     super.initState();
@@ -128,6 +145,10 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
       _measureDragStartViewport = null;
       _measureDragFixedAnchor = null;
       _measureDragEditingEndpoint = null;
+      _roiMeasurements.clear();
+      _inProgressRoi = null;
+      _roiDragDownViewport = null;
+      _roiDragStartViewport = null;
       _renderImage();
     } else if (oldWidget.frameIndex != widget.frameIndex) {
       _inProgressMeasurement = null;
@@ -135,6 +156,9 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
       _measureDragStartViewport = null;
       _measureDragFixedAnchor = null;
       _measureDragEditingEndpoint = null;
+      _inProgressRoi = null;
+      _roiDragDownViewport = null;
+      _roiDragStartViewport = null;
       _renderImage();
     }
   }
@@ -399,6 +423,71 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     });
   }
 
+  void _onRoiPanDown(DragDownDetails details) {
+    _roiDragDownViewport = details.localPosition;
+  }
+
+  void _onRoiPanStart(
+    DragStartDetails details,
+    ImageCoordinateTransform transform,
+  ) {
+    final downPos = _roiDragDownViewport ?? details.localPosition;
+    _roiDragStartViewport = downPos;
+    final startPoint = transform.viewportToImage(downPos);
+    final currentPoint = transform.viewportToImage(details.localPosition);
+    final geometry = transform.geometry;
+
+    setState(() {
+      _inProgressRoi = DicomRectangleRoiMeasurement.fromImagePoints(
+        start: startPoint,
+        end: currentPoint,
+        frameIndex: widget.frameIndex,
+        geometry: geometry,
+      );
+    });
+  }
+
+  void _onRoiPanUpdate(
+    DragUpdateDetails details,
+    ImageCoordinateTransform transform,
+  ) {
+    if (_roiDragStartViewport == null) return;
+    final startPoint = transform.viewportToImage(_roiDragStartViewport!);
+    final currentPoint = transform.viewportToImage(details.localPosition);
+    final geometry = transform.geometry;
+
+    setState(() {
+      _inProgressRoi = DicomRectangleRoiMeasurement.fromImagePoints(
+        start: startPoint,
+        end: currentPoint,
+        frameIndex: widget.frameIndex,
+        geometry: geometry,
+      );
+    });
+  }
+
+  void _onRoiPanEnd(
+    DragEndDetails details,
+    ImageCoordinateTransform transform,
+  ) {
+    if (_inProgressRoi != null && _inProgressRoi!.isValid) {
+      _roiMeasurements[widget.frameIndex] = _inProgressRoi!;
+    }
+    setState(() {
+      _inProgressRoi = null;
+      _roiDragDownViewport = null;
+      _roiDragStartViewport = null;
+    });
+  }
+
+  void _onRoiPanCancel() {
+    setState(() {
+      _inProgressRoi = null;
+      _roiDragDownViewport = null;
+      _roiDragStartViewport = null;
+    });
+  }
+
   void resetWindowing() {
     if (_isMonochrome) {
       setState(() {
@@ -408,6 +497,9 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
         _measureDragStartViewport = null;
         _measureDragFixedAnchor = null;
         _measureDragEditingEndpoint = null;
+        _inProgressRoi = null;
+        _roiDragDownViewport = null;
+        _roiDragStartViewport = null;
       });
       unawaited(_renderImage());
     } else {
@@ -417,6 +509,9 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
         _measureDragStartViewport = null;
         _measureDragFixedAnchor = null;
         _measureDragEditingEndpoint = null;
+        _inProgressRoi = null;
+        _roiDragDownViewport = null;
+        _roiDragStartViewport = null;
       });
     }
   }
@@ -466,6 +561,7 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
 
         final activeMeasurement =
             _inProgressMeasurement ?? _measurements[widget.frameIndex];
+        final activeRoi = _inProgressRoi ?? _roiMeasurements[widget.frameIndex];
 
         Widget imageContent = Center(
           child:
@@ -513,6 +609,12 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
           panUpdate = (details) => _onMeasurePanUpdate(details, transform);
           panEnd = (details) => _onMeasurePanEnd(details, transform);
           panCancel = _onMeasurePanCancel;
+        } else if (widget.tool == DicomTool.rectangleRoi) {
+          panDown = _onRoiPanDown;
+          panStart = (details) => _onRoiPanStart(details, transform);
+          panUpdate = (details) => _onRoiPanUpdate(details, transform);
+          panEnd = (details) => _onRoiPanEnd(details, transform);
+          panCancel = _onRoiPanCancel;
         } else if (widget.tool == DicomTool.windowing || !widget.enableZoom) {
           panDown = null;
           panStart = null;
@@ -562,6 +664,26 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
                         size: viewportSize,
                         painter: DistanceMeasurementPainter(
                           measurement: activeMeasurement,
+                          transform: transform,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+              // Rectangle ROI Overlay
+              if (viewportSize.width > 0 && viewportSize.height > 0)
+                Positioned.fill(
+                  child: Semantics(
+                    label:
+                        activeRoi != null && activeRoi.isValid
+                            ? activeRoi.semanticsLabel
+                            : null,
+                    child: IgnorePointer(
+                      child: CustomPaint(
+                        size: viewportSize,
+                        painter: RectangleRoiPainter(
+                          measurement: activeRoi,
                           transform: transform,
                         ),
                       ),
@@ -649,6 +771,18 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
                       if (widget.tool == DicomTool.measure) ...[
                         const Text(
                           'Tool: Measure (Drag across image to measure distance)',
+                          style: TextStyle(
+                            color: Colors.yellowAccent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            shadows: [
+                              Shadow(blurRadius: 4, color: Colors.black),
+                            ],
+                          ),
+                        ),
+                      ] else if (widget.tool == DicomTool.rectangleRoi) ...[
+                        const Text(
+                          'Tool: Rectangle ROI (Drag to draw region of interest)',
                           style: TextStyle(
                             color: Colors.yellowAccent,
                             fontSize: 11,
