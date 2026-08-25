@@ -115,7 +115,11 @@ class RectangleRoiPainter extends CustomPainter {
     _drawCornerMarker(canvas, bottomRight, mainColor, shadowColor);
 
     // Measurement badge
-    _drawMeasurementBadge(canvas, vpRect, m.formattedDimensions, mainColor);
+    final lines = [m.formattedDimensions];
+    if (m.statistics != null) {
+      lines.addAll(m.statistics!.formattedLines);
+    }
+    _drawMeasurementBadge(canvas, vpRect, lines, mainColor);
   }
 
   void _paintInvalidRoi(
@@ -160,7 +164,7 @@ class RectangleRoiPainter extends CustomPainter {
     _drawCornerMarker(canvas, bottomRight, errorColor, shadowColor);
 
     // Error badge
-    _drawMeasurementBadge(canvas, vpRect, 'Out of bounds', errorColor);
+    _drawMeasurementBadge(canvas, vpRect, const ['Out of bounds'], errorColor);
   }
 
   void _drawCornerMarker(
@@ -187,26 +191,35 @@ class RectangleRoiPainter extends CustomPainter {
   void _drawMeasurementBadge(
     Canvas canvas,
     Rect vpRect,
-    String text,
+    List<String> lines,
     Color accentColor,
   ) {
-    final textSpan = TextSpan(
-      text: text,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 11,
-        fontWeight: FontWeight.bold,
-        letterSpacing: 0.3,
-      ),
-    );
+    final textSpans = <TextSpan>[];
+    for (int i = 0; i < lines.length; i++) {
+      if (i > 0) {
+        textSpans.add(const TextSpan(text: '\n'));
+      }
+      textSpans.add(
+        TextSpan(
+          text: lines[i],
+          style: TextStyle(
+            color: i == 0 ? Colors.white : Colors.white70,
+            fontSize: i == 0 ? 11 : 10,
+            fontWeight: i == 0 ? FontWeight.bold : FontWeight.w500,
+            letterSpacing: 0.3,
+            height: 1.3,
+          ),
+        ),
+      );
+    }
 
     final textPainter = TextPainter(
-      text: textSpan,
+      text: TextSpan(children: textSpans),
       textDirection: TextDirection.ltr,
     )..layout();
 
     const padH = 6.0;
-    const padV = 3.0;
+    const padV = 4.0;
     final badgeWidth = textPainter.width + padH * 2;
     final badgeHeight = textPainter.height + padV * 2;
 

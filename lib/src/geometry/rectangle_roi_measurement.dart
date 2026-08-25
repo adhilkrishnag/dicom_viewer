@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 
 import 'dicom_image_geometry.dart';
+import 'dicom_roi_statistics_engine.dart';
 import 'image_coordinate_transform.dart';
 
 /// Represents a completed or in-progress rectangular Region of Interest (ROI)
@@ -63,6 +64,7 @@ class DicomRectangleRoiMeasurement {
     this.areaMm2,
     required this.isValid,
     required this.frameIndex,
+    this.statistics,
   });
 
   /// Computes a [DicomRectangleRoiMeasurement] from two continuous [ImagePoint]s
@@ -76,6 +78,7 @@ class DicomRectangleRoiMeasurement {
     required ImagePoint end,
     required int frameIndex,
     required DicomImageGeometry geometry,
+    DicomRoiStatistics? statistics,
   }) {
     // Normalize rectangle: ensure left <= right, top <= bottom
     final left = math.min(start.pixelX, end.pixelX);
@@ -120,6 +123,7 @@ class DicomRectangleRoiMeasurement {
       areaMm2: area,
       isValid: isValid,
       frameIndex: frameIndex,
+      statistics: statistics,
     );
   }
 
@@ -161,6 +165,27 @@ class DicomRectangleRoiMeasurement {
   /// The multi-frame image index (0-indexed) this ROI belongs to.
   final int frameIndex;
 
+  /// Quantitative pixel statistics calculated for this ROI, or null if in-progress/uncalculated.
+  final DicomRoiStatistics? statistics;
+
+  /// Creates a copy of this measurement with optionally updated [statistics].
+  DicomRectangleRoiMeasurement copyWith({DicomRoiStatistics? statistics}) {
+    return DicomRectangleRoiMeasurement(
+      startPoint: startPoint,
+      endPoint: endPoint,
+      normalizedRect: normalizedRect,
+      pixelWidth: pixelWidth,
+      pixelHeight: pixelHeight,
+      areaPx: areaPx,
+      physicalWidthMm: physicalWidthMm,
+      physicalHeightMm: physicalHeightMm,
+      areaMm2: areaMm2,
+      isValid: isValid,
+      frameIndex: frameIndex,
+      statistics: statistics ?? this.statistics,
+    );
+  }
+
   /// Whether physical millimeter measurements are available.
   bool get hasPhysicalMeasurement =>
       physicalWidthMm != null && physicalHeightMm != null && areaMm2 != null;
@@ -190,16 +215,21 @@ class DicomRectangleRoiMeasurement {
   /// Accessibility-friendly label for screen readers.
   String get semanticsLabel {
     if (!isValid) return 'Rectangle ROI: Out of bounds';
-    if (hasPhysicalMeasurement) {
-      return 'Rectangle ROI: '
-          'Width ${physicalWidthMm!.toStringAsFixed(1)} millimeters, '
-          'Height ${physicalHeightMm!.toStringAsFixed(1)} millimeters, '
-          'Area ${areaMm2!.toStringAsFixed(1)} square millimeters';
+    final geoStr =
+        hasPhysicalMeasurement
+            ? 'Rectangle ROI: '
+                'Width ${physicalWidthMm!.toStringAsFixed(1)} millimeters, '
+                'Height ${physicalHeightMm!.toStringAsFixed(1)} millimeters, '
+                'Area ${areaMm2!.toStringAsFixed(1)} square millimeters'
+            : 'Rectangle ROI: '
+                'Width ${pixelWidth.toStringAsFixed(1)} pixels, '
+                'Height ${pixelHeight.toStringAsFixed(1)} pixels, '
+                'Area ${areaPx.toStringAsFixed(1)} square pixels';
+
+    if (statistics != null) {
+      return '$geoStr. ${statistics!.semanticsSummary}';
     }
-    return 'Rectangle ROI: '
-        'Width ${pixelWidth.toStringAsFixed(1)} pixels, '
-        'Height ${pixelHeight.toStringAsFixed(1)} pixels, '
-        'Area ${areaPx.toStringAsFixed(1)} square pixels';
+    return geoStr;
   }
 
   @override
@@ -217,7 +247,8 @@ class DicomRectangleRoiMeasurement {
           physicalHeightMm == other.physicalHeightMm &&
           areaMm2 == other.areaMm2 &&
           isValid == other.isValid &&
-          frameIndex == other.frameIndex;
+          frameIndex == other.frameIndex &&
+          statistics == other.statistics;
 
   @override
   int get hashCode =>
@@ -231,10 +262,11 @@ class DicomRectangleRoiMeasurement {
       physicalHeightMm.hashCode ^
       areaMm2.hashCode ^
       isValid.hashCode ^
-      frameIndex.hashCode;
+      frameIndex.hashCode ^
+      statistics.hashCode;
 
   @override
   String toString() =>
       'DicomRectangleRoiMeasurement(frame: $frameIndex, rect: $normalizedRect, '
-      'dimensions: $formattedDimensions, isValid: $isValid)';
+      'dimensions: $formattedDimensions, stats: $statistics, isValid: $isValid)';
 }

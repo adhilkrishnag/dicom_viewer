@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../geometry/dicom_image_geometry.dart';
+import '../geometry/dicom_roi_statistics_engine.dart';
 import '../geometry/distance_measurement.dart';
 import '../geometry/distance_measurement_painter.dart';
 import '../geometry/image_coordinate_transform.dart';
@@ -471,7 +472,13 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     ImageCoordinateTransform transform,
   ) {
     if (_inProgressRoi != null && _inProgressRoi!.isValid) {
-      _roiMeasurements[widget.frameIndex] = _inProgressRoi!;
+      final stats = DicomRoiStatisticsEngine.computeStatistics(
+        dataset: widget.dataset,
+        normalizedRect: _inProgressRoi!.normalizedRect,
+        frameIndex: widget.frameIndex,
+      );
+      final completedRoi = _inProgressRoi!.copyWith(statistics: stats);
+      _roiMeasurements[widget.frameIndex] = completedRoi;
     }
     setState(() {
       _inProgressRoi = null;

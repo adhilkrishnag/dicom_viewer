@@ -14,6 +14,12 @@ class SyntheticDicomGenerator {
     String photometricInterpretation = 'MONOCHROME2',
     double rescaleSlope = 1.0,
     double rescaleIntercept = -1024.0,
+    bool includeRescaleSlope = true,
+    bool includeRescaleIntercept = true,
+    String? rescaleSlopeString,
+    String? rescaleInterceptString,
+    int? pixelPaddingValue,
+    int? pixelPaddingRangeLimit,
     double windowCenter = 40.0,
     double windowWidth = 400.0,
     String? windowCenterString,
@@ -134,8 +140,49 @@ class SyntheticDicomGenerator {
     writeUint16(0x0028, 0x0102, highBit);
     writeUint16(0x0028, 0x0103, pixelRepresentation);
 
-    writeString(0x0028, 0x1052, 'DS', rescaleIntercept.toString());
-    writeString(0x0028, 0x1053, 'DS', rescaleSlope.toString());
+    if (includeRescaleIntercept) {
+      writeString(
+        0x0028,
+        0x1052,
+        'DS',
+        rescaleInterceptString ?? rescaleIntercept.toString(),
+      );
+    }
+    if (includeRescaleSlope) {
+      writeString(
+        0x0028,
+        0x1053,
+        'DS',
+        rescaleSlopeString ?? rescaleSlope.toString(),
+      );
+    }
+    if (pixelPaddingValue != null) {
+      if (bitsAllocated == 8) {
+        writeElement(
+          0x0028,
+          0x0120,
+          'US',
+          Uint8List.fromList([pixelPaddingValue & 0xFF, 0x00]),
+        );
+      } else {
+        final bd = ByteData(2)..setUint16(0, pixelPaddingValue, Endian.little);
+        writeElement(0x0028, 0x0120, 'US', bd.buffer.asUint8List());
+      }
+    }
+    if (pixelPaddingRangeLimit != null) {
+      if (bitsAllocated == 8) {
+        writeElement(
+          0x0028,
+          0x0121,
+          'US',
+          Uint8List.fromList([pixelPaddingRangeLimit & 0xFF, 0x00]),
+        );
+      } else {
+        final bd = ByteData(2)
+          ..setUint16(0, pixelPaddingRangeLimit, Endian.little);
+        writeElement(0x0028, 0x0121, 'US', bd.buffer.asUint8List());
+      }
+    }
     writeString(
       0x0028,
       0x1050,
