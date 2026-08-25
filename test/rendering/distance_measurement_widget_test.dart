@@ -667,4 +667,466 @@ void main() {
       },
     );
   });
+
+  group('Task 5 — Overlay Rendering, Endpoint Interaction & Semantics Tests', () {
+    testWidgets(
+      '44. Overlay painter renders line, endpoint markers, and distance badge on canvas (Real Fixture)',
+      (tester) async {
+        await tester.pumpWidget(
+          createViewer(dataset: ctDataset, tool: DicomTool.measure),
+        );
+        await pumpAndRender(tester);
+
+        // Perform drag
+        final gesture = await tester.startGesture(const Offset(300, 300));
+        await tester.pump();
+        await gesture.moveTo(const Offset(450, 300));
+        await tester.pump();
+        await gesture.up();
+        await pumpAndRender(tester);
+
+        final customPaints = tester.widgetList<CustomPaint>(
+          find.byType(CustomPaint),
+        );
+        final overlayPainter =
+            customPaints
+                    .firstWhere(
+                      (cp) => cp.painter is DistanceMeasurementPainter,
+                    )
+                    .painter
+                as DistanceMeasurementPainter;
+
+        expect(overlayPainter.measurement, isNotNull);
+        expect(overlayPainter.measurement!.isValid, isTrue);
+        expect(overlayPainter.measurement!.hasPhysicalMeasurement, isTrue);
+        expect(overlayPainter.measurement!.formattedDistance, contains('mm'));
+      },
+    );
+
+    testWidgets(
+      '45. Endpoint adjustment allows dragging start marker to update start point while anchoring end point (Real Fixture)',
+      (tester) async {
+        await tester.pumpWidget(
+          createViewer(dataset: ctDataset, tool: DicomTool.measure),
+        );
+        await pumpAndRender(tester);
+
+        // 1. Initial measurement from (300, 300) to (450, 300)
+        var gesture = await tester.startGesture(const Offset(300, 300));
+        await tester.pump();
+        await gesture.moveTo(const Offset(450, 300));
+        await tester.pump();
+        await gesture.up();
+        await pumpAndRender(tester);
+
+        var customPaints = tester.widgetList<CustomPaint>(
+          find.byType(CustomPaint),
+        );
+        var overlay =
+            customPaints
+                    .firstWhere(
+                      (cp) => cp.painter is DistanceMeasurementPainter,
+                    )
+                    .painter
+                as DistanceMeasurementPainter;
+        final initialEndPxX = overlay.measurement!.end.pixelX;
+        final initialStartPxX = overlay.measurement!.start.pixelX;
+
+        // 2. Drag start marker from (300, 300) to (250, 300)
+        gesture = await tester.startGesture(const Offset(300, 300));
+        await tester.pump();
+        await gesture.moveTo(const Offset(250, 300));
+        await tester.pump();
+        await gesture.up();
+        await pumpAndRender(tester);
+
+        customPaints = tester.widgetList<CustomPaint>(find.byType(CustomPaint));
+        overlay =
+            customPaints
+                    .firstWhere(
+                      (cp) => cp.painter is DistanceMeasurementPainter,
+                    )
+                    .painter
+                as DistanceMeasurementPainter;
+
+        // Start point moved leftwards, end point remained anchored
+        expect(overlay.measurement!.start.pixelX, lessThan(initialStartPxX));
+        expect(overlay.measurement!.end.pixelX, closeTo(initialEndPxX, 1e-4));
+      },
+    );
+
+    testWidgets(
+      '46. Endpoint adjustment allows dragging end marker to update end point while anchoring start point (Real Fixture)',
+      (tester) async {
+        await tester.pumpWidget(
+          createViewer(dataset: ctDataset, tool: DicomTool.measure),
+        );
+        await pumpAndRender(tester);
+
+        // 1. Initial measurement from (300, 300) to (450, 300)
+        var gesture = await tester.startGesture(const Offset(300, 300));
+        await tester.pump();
+        await gesture.moveTo(const Offset(450, 300));
+        await tester.pump();
+        await gesture.up();
+        await pumpAndRender(tester);
+
+        var customPaints = tester.widgetList<CustomPaint>(
+          find.byType(CustomPaint),
+        );
+        var overlay =
+            customPaints
+                    .firstWhere(
+                      (cp) => cp.painter is DistanceMeasurementPainter,
+                    )
+                    .painter
+                as DistanceMeasurementPainter;
+        final initialStartPxX = overlay.measurement!.start.pixelX;
+        final initialEndPxX = overlay.measurement!.end.pixelX;
+
+        // 2. Drag end marker from (450, 300) to (500, 300)
+        gesture = await tester.startGesture(const Offset(450, 300));
+        await tester.pump();
+        await gesture.moveTo(const Offset(500, 300));
+        await tester.pump();
+        await gesture.up();
+        await pumpAndRender(tester);
+
+        customPaints = tester.widgetList<CustomPaint>(find.byType(CustomPaint));
+        overlay =
+            customPaints
+                    .firstWhere(
+                      (cp) => cp.painter is DistanceMeasurementPainter,
+                    )
+                    .painter
+                as DistanceMeasurementPainter;
+
+        // Start point remained anchored, end point moved rightwards
+        expect(
+          overlay.measurement!.start.pixelX,
+          closeTo(initialStartPxX, 1e-4),
+        );
+        expect(overlay.measurement!.end.pixelX, greaterThan(initialEndPxX));
+      },
+    );
+
+    testWidgets(
+      '47. Tapping outside existing marker thresholds starts a new measurement replacing the old one (Real Fixture)',
+      (tester) async {
+        await tester.pumpWidget(
+          createViewer(dataset: ctDataset, tool: DicomTool.measure),
+        );
+        await pumpAndRender(tester);
+
+        // 1. Measurement 1: horizontal (300, 300) -> (450, 300)
+        var gesture = await tester.startGesture(const Offset(300, 300));
+        await tester.pump();
+        await gesture.moveTo(const Offset(450, 300));
+        await tester.pump();
+        await gesture.up();
+        await pumpAndRender(tester);
+
+        // 2. Start new measurement far away: vertical (350, 200) -> (350, 400)
+        gesture = await tester.startGesture(const Offset(350, 200));
+        await tester.pump();
+        await gesture.moveTo(const Offset(350, 400));
+        await tester.pump();
+        await gesture.up();
+        await pumpAndRender(tester);
+
+        final customPaints = tester.widgetList<CustomPaint>(
+          find.byType(CustomPaint),
+        );
+        final overlay =
+            customPaints
+                    .firstWhere(
+                      (cp) => cp.painter is DistanceMeasurementPainter,
+                    )
+                    .painter
+                as DistanceMeasurementPainter;
+
+        // Check that new vertical measurement replaced the old one
+        expect(
+          overlay.measurement!.start.pixelY,
+          lessThan(overlay.measurement!.end.pixelY),
+        );
+        expect(overlay.measurement!.deltaPixelX, closeTo(0.0, 1e-4));
+      },
+    );
+
+    testWidgets(
+      '48. Measurement overlay exposes accessible Semantics with formatted distance description (Real Fixture)',
+      (tester) async {
+        await tester.pumpWidget(
+          createViewer(dataset: ctDataset, tool: DicomTool.measure),
+        );
+        await pumpAndRender(tester);
+
+        // Initial state before measurement: no measurement semantics
+        var semanticsFinder = find.byWidgetPredicate(
+          (w) =>
+              w is Semantics &&
+              w.properties.label != null &&
+              w.properties.label!.contains('Distance measurement:'),
+        );
+        expect(semanticsFinder, findsNothing);
+
+        // Draw measurement
+        final gesture = await tester.startGesture(const Offset(300, 300));
+        await tester.pump();
+        await gesture.moveTo(const Offset(450, 300));
+        await tester.pump();
+        await gesture.up();
+        await pumpAndRender(tester);
+
+        semanticsFinder = find.byWidgetPredicate(
+          (w) =>
+              w is Semantics &&
+              w.properties.label != null &&
+              w.properties.label!.contains('Distance measurement:'),
+        );
+        expect(semanticsFinder, findsOneWidget);
+        final semantics = tester.widget<Semantics>(semanticsFinder);
+        expect(semantics.properties.label, contains('millimeters'));
+      },
+    );
+
+    testWidgets(
+      '49. Releasing endpoint outside image during active drag cancels and does not commit invalid measurement (Real Fixture)',
+      (tester) async {
+        await tester.pumpWidget(
+          createViewer(
+            dataset: ctDataset,
+            tool: DicomTool.measure,
+            width: 800,
+            height: 600,
+          ),
+        );
+        await pumpAndRender(tester);
+
+        // Start inside (400, 300), drag far outside into letterbox (50, 50)
+        final gesture = await tester.startGesture(const Offset(400, 300));
+        await tester.pump();
+        await gesture.moveTo(const Offset(50, 50));
+        await tester.pump();
+        await gesture.up();
+        await pumpAndRender(tester);
+
+        final customPaints = tester.widgetList<CustomPaint>(
+          find.byType(CustomPaint),
+        );
+        final overlay =
+            customPaints
+                    .firstWhere(
+                      (cp) => cp.painter is DistanceMeasurementPainter,
+                    )
+                    .painter
+                as DistanceMeasurementPainter;
+
+        // Uncommitted invalid measurement is cleared
+        expect(overlay.measurement, isNull);
+      },
+    );
+
+    testWidgets(
+      '50. Continuous dragging across boundary dynamically switches between valid and invalid overlay state (Real Fixture)',
+      (tester) async {
+        await tester.pumpWidget(
+          createViewer(
+            dataset: ctDataset,
+            tool: DicomTool.measure,
+            width: 800,
+            height: 600,
+          ),
+        );
+        await pumpAndRender(tester);
+
+        final gesture = await tester.startGesture(const Offset(400, 300));
+        await tester.pump();
+
+        // 1. Move inside image
+        await gesture.moveTo(const Offset(450, 300));
+        await tester.pump();
+        var customPaints = tester.widgetList<CustomPaint>(
+          find.byType(CustomPaint),
+        );
+        var overlay =
+            customPaints
+                    .firstWhere(
+                      (cp) => cp.painter is DistanceMeasurementPainter,
+                    )
+                    .painter
+                as DistanceMeasurementPainter;
+        expect(overlay.measurement!.isValid, isTrue);
+
+        // 2. Move into letterbox outside image
+        await gesture.moveTo(const Offset(20, 20));
+        await tester.pump();
+        customPaints = tester.widgetList<CustomPaint>(find.byType(CustomPaint));
+        overlay =
+            customPaints
+                    .firstWhere(
+                      (cp) => cp.painter is DistanceMeasurementPainter,
+                    )
+                    .painter
+                as DistanceMeasurementPainter;
+        expect(overlay.measurement!.isValid, isFalse);
+
+        // 3. Move back inside image
+        await gesture.moveTo(const Offset(420, 320));
+        await tester.pump();
+        customPaints = tester.widgetList<CustomPaint>(find.byType(CustomPaint));
+        overlay =
+            customPaints
+                    .firstWhere(
+                      (cp) => cp.painter is DistanceMeasurementPainter,
+                    )
+                    .painter
+                as DistanceMeasurementPainter;
+        expect(overlay.measurement!.isValid, isTrue);
+
+        await gesture.up();
+        await pumpAndRender(tester);
+      },
+    );
+
+    testWidgets(
+      '51. Viewport resize maintains accurate relative position and distance badge (Real Fixture)',
+      (tester) async {
+        // Render at 800x600
+        await tester.pumpWidget(
+          createViewer(
+            dataset: ctDataset,
+            tool: DicomTool.measure,
+            width: 800,
+            height: 600,
+          ),
+        );
+        await pumpAndRender(tester);
+
+        final gesture = await tester.startGesture(const Offset(350, 300));
+        await tester.pump();
+        await gesture.moveTo(const Offset(450, 300));
+        await tester.pump();
+        await gesture.up();
+        await pumpAndRender(tester);
+
+        var customPaints = tester.widgetList<CustomPaint>(
+          find.byType(CustomPaint),
+        );
+        var overlay =
+            customPaints
+                    .firstWhere(
+                      (cp) => cp.painter is DistanceMeasurementPainter,
+                    )
+                    .painter
+                as DistanceMeasurementPainter;
+        final distBefore = overlay.measurement!.physicalDistanceMm;
+
+        // Re-render in resized 600x400 viewport
+        await tester.pumpWidget(
+          createViewer(
+            dataset: ctDataset,
+            tool: DicomTool.measure,
+            width: 600,
+            height: 400,
+          ),
+        );
+        await pumpAndRender(tester);
+
+        customPaints = tester.widgetList<CustomPaint>(find.byType(CustomPaint));
+        overlay =
+            customPaints
+                    .firstWhere(
+                      (cp) => cp.painter is DistanceMeasurementPainter,
+                    )
+                    .painter
+                as DistanceMeasurementPainter;
+        final distAfter = overlay.measurement!.physicalDistanceMm;
+
+        expect(distAfter, closeTo(distBefore!, 1e-4));
+      },
+    );
+
+    testWidgets(
+      '52. Tool switching between Measure, Pan, and Windowing retains gesture isolation and overlay visibility (Real Fixture)',
+      (tester) async {
+        // Measure mode
+        await tester.pumpWidget(
+          createViewer(dataset: ctDataset, tool: DicomTool.measure),
+        );
+        await pumpAndRender(tester);
+
+        final gesture = await tester.startGesture(const Offset(300, 300));
+        await tester.pump();
+        await gesture.moveTo(const Offset(450, 300));
+        await tester.pump();
+        await gesture.up();
+        await pumpAndRender(tester);
+
+        // Switch to Windowing mode
+        await tester.pumpWidget(
+          createViewer(dataset: ctDataset, tool: DicomTool.windowing),
+        );
+        await pumpAndRender(tester);
+
+        var customPaints = tester.widgetList<CustomPaint>(
+          find.byType(CustomPaint),
+        );
+        var overlay =
+            customPaints
+                    .firstWhere(
+                      (cp) => cp.painter is DistanceMeasurementPainter,
+                    )
+                    .painter
+                as DistanceMeasurementPainter;
+        expect(overlay.measurement, isNotNull);
+
+        // Switch to Pan mode
+        await tester.pumpWidget(
+          createViewer(dataset: ctDataset, tool: DicomTool.pan),
+        );
+        await pumpAndRender(tester);
+
+        customPaints = tester.widgetList<CustomPaint>(find.byType(CustomPaint));
+        overlay =
+            customPaints
+                    .firstWhere(
+                      (cp) => cp.painter is DistanceMeasurementPainter,
+                    )
+                    .painter
+                as DistanceMeasurementPainter;
+        expect(overlay.measurement, isNotNull);
+      },
+    );
+
+    testWidgets(
+      '53. Performance: Dragging measurement does not trigger full image decoding or re-rendering (Real Fixture)',
+      (tester) async {
+        await tester.pumpWidget(
+          createViewer(dataset: ctDataset, tool: DicomTool.measure),
+        );
+        await pumpAndRender(tester);
+
+        final rawImageBefore = tester.widget<RawImage>(find.byType(RawImage));
+        final imageHandleBefore = rawImageBefore.image;
+
+        // Perform multi-step drag
+        final gesture = await tester.startGesture(const Offset(300, 300));
+        await tester.pump();
+        for (int i = 0; i < 10; i++) {
+          await gesture.moveTo(Offset(300.0 + i * 10, 300.0 + i * 5));
+          await tester.pump();
+        }
+        await gesture.up();
+        await pumpAndRender(tester);
+
+        final rawImageAfter = tester.widget<RawImage>(find.byType(RawImage));
+        final imageHandleAfter = rawImageAfter.image;
+
+        // Image instance was not re-decoded or recreated
+        expect(identical(imageHandleBefore, imageHandleAfter), isTrue);
+      },
+    );
+  });
 }

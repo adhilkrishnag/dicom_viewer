@@ -599,4 +599,209 @@ void main() {
       },
     );
   });
+
+  group('Task 5 — Architectural Consolidation & Authoritative Calculation Tests', () {
+    const geometry = DicomImageGeometry(
+      columns: 512,
+      rows: 256,
+      rowSpacing: 1.5,
+      columnSpacing: 0.75,
+    );
+
+    test(
+      '39. DicomDistanceMeasurement.fromPoints() produces identical results to measureBetweenImagePoints() (Synthetic)',
+      () {
+        const transform = ImageCoordinateTransform(
+          geometry: geometry,
+          viewportSize: Size(800, 600),
+        );
+        const p1 = ImagePoint(
+          pixelX: 50.0,
+          pixelY: 100.0,
+          physicalXMm: 37.5,
+          physicalYMm: 150.0,
+          isInsideImage: true,
+        );
+        const p2 = ImagePoint(
+          pixelX: 200.0,
+          pixelY: 200.0,
+          physicalXMm: 150.0,
+          physicalYMm: 300.0,
+          isInsideImage: true,
+        );
+
+        final result = transform.measureBetweenImagePoints(p1, p2);
+        final measurement = DicomDistanceMeasurement.fromPoints(
+          start: p1,
+          end: p2,
+          frameIndex: 0,
+          geometry: geometry,
+        );
+
+        expect(measurement.start, equals(result.start));
+        expect(measurement.end, equals(result.end));
+        expect(measurement.deltaPixelX, equals(result.deltaPixelX));
+        expect(measurement.deltaPixelY, equals(result.deltaPixelY));
+        expect(measurement.pixelDistance, equals(result.pixelDistance));
+        expect(measurement.deltaPhysicalXMm, equals(result.deltaPhysicalXMm));
+        expect(measurement.deltaPhysicalYMm, equals(result.deltaPhysicalYMm));
+        expect(
+          measurement.physicalDistanceMm,
+          equals(result.physicalDistanceMm),
+        );
+        expect(measurement.isValid, equals(result.isValid));
+      },
+    );
+
+    test(
+      '40. DicomDistanceMeasurement.fromResult() produces identical results to ImageCoordinateTransform calculations (Synthetic)',
+      () {
+        const transform = ImageCoordinateTransform(
+          geometry: geometry,
+          viewportSize: Size(800, 600),
+        );
+        const p1 = ImagePoint(
+          pixelX: 10.0,
+          pixelY: 20.0,
+          physicalXMm: 7.5,
+          physicalYMm: 30.0,
+          isInsideImage: true,
+        );
+        const p2 = ImagePoint(
+          pixelX: 110.0,
+          pixelY: 120.0,
+          physicalXMm: 82.5,
+          physicalYMm: 180.0,
+          isInsideImage: true,
+        );
+
+        final result = transform.measureBetweenImagePoints(p1, p2);
+        final measurement = DicomDistanceMeasurement.fromResult(
+          result: result,
+          frameIndex: 2,
+        );
+
+        expect(measurement.frameIndex, equals(2));
+        expect(measurement.pixelDistance, equals(result.pixelDistance));
+        expect(
+          measurement.physicalDistanceMm,
+          equals(result.physicalDistanceMm),
+        );
+        expect(measurement.isValid, equals(result.isValid));
+      },
+    );
+
+    test(
+      '41. Boundary semantics (isValid) strictly match between transform and measurement (Synthetic)',
+      () {
+        const transform = ImageCoordinateTransform(
+          geometry: geometry,
+          viewportSize: Size(800, 600),
+        );
+        const inside = ImagePoint(
+          pixelX: 100,
+          pixelY: 100,
+          isInsideImage: true,
+        );
+        const outside = ImagePoint(
+          pixelX: -10,
+          pixelY: 100,
+          isInsideImage: false,
+        );
+
+        final resultBothInside = transform.measureBetweenImagePoints(
+          inside,
+          inside,
+        );
+        final mBothInside = DicomDistanceMeasurement.fromPoints(
+          start: inside,
+          end: inside,
+          frameIndex: 0,
+          geometry: geometry,
+        );
+        expect(resultBothInside.isValid, isTrue);
+        expect(mBothInside.isValid, isTrue);
+
+        final resultOneOutside = transform.measureBetweenImagePoints(
+          inside,
+          outside,
+        );
+        final mOneOutside = DicomDistanceMeasurement.fromPoints(
+          start: inside,
+          end: outside,
+          frameIndex: 0,
+          geometry: geometry,
+        );
+        expect(resultOneOutside.isValid, isFalse);
+        expect(mOneOutside.isValid, isFalse);
+        expect(mOneOutside.formattedDistance, equals('Out of bounds'));
+      },
+    );
+
+    test(
+      '42. Pixel distance, physical distance, and anisotropic spacing match authoritatively (Synthetic)',
+      () {
+        const transform = ImageCoordinateTransform(
+          geometry: geometry,
+          viewportSize: Size(800, 600),
+        );
+        // dx = 40 px, dy = 30 px
+        // physical: dxMm = 40 * 0.75 = 30 mm, dyMm = 30 * 1.5 = 45 mm
+        // distMm = sqrt(30^2 + 45^2) = sqrt(900 + 2025) = sqrt(2925) ≈ 54.083 mm
+        const p1 = ImagePoint(pixelX: 0, pixelY: 0, isInsideImage: true);
+        const p2 = ImagePoint(pixelX: 40, pixelY: 30, isInsideImage: true);
+
+        final result = transform.measureBetweenImagePoints(p1, p2);
+        final measurement = DicomDistanceMeasurement.fromPoints(
+          start: p1,
+          end: p2,
+          frameIndex: 0,
+          geometry: geometry,
+        );
+
+        expect(result.pixelDistance, closeTo(50.0, 1e-5));
+        expect(measurement.pixelDistance, closeTo(50.0, 1e-5));
+        expect(result.physicalDistanceMm, closeTo(math.sqrt(2925.0), 1e-5));
+        expect(
+          measurement.physicalDistanceMm,
+          closeTo(math.sqrt(2925.0), 1e-5),
+        );
+        expect(
+          measurement.formattedDistance,
+          equals('${math.sqrt(2925.0).toStringAsFixed(1)} mm'),
+        );
+      },
+    );
+
+    test(
+      '43. Invalid spacing fallback is identical across all calculation pathways (Synthetic)',
+      () {
+        const noSpacingGeometry = DicomImageGeometry(columns: 256, rows: 256);
+        const transform = ImageCoordinateTransform(
+          geometry: noSpacingGeometry,
+          viewportSize: Size(512, 512),
+        );
+        const p1 = ImagePoint(pixelX: 10, pixelY: 10, isInsideImage: true);
+        const p2 = ImagePoint(pixelX: 40, pixelY: 50, isInsideImage: true);
+
+        final result = transform.measureBetweenImagePoints(p1, p2);
+        final measurement = DicomDistanceMeasurement.fromPoints(
+          start: p1,
+          end: p2,
+          frameIndex: 0,
+          geometry: noSpacingGeometry,
+        );
+
+        expect(result.hasPhysicalMeasurement, isFalse);
+        expect(measurement.hasPhysicalMeasurement, isFalse);
+        expect(result.physicalDistanceMm, isNull);
+        expect(measurement.physicalDistanceMm, isNull);
+        expect(measurement.pixelDistance, closeTo(50.0, 1e-5));
+        expect(
+          measurement.formattedDistance,
+          equals('50.0 px (Physical unavailable)'),
+        );
+      },
+    );
+  });
 }

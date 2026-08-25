@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+import 'package:flutter/widgets.dart';
 import 'dicom_image_geometry.dart';
 import 'image_coordinate_transform.dart';
 
@@ -18,40 +18,41 @@ class DicomDistanceMeasurement {
     required this.isValid,
   });
 
-  /// Computes a [DicomDistanceMeasurement] from two continuous [ImagePoint]s and image [geometry].
+  /// Creates a [DicomDistanceMeasurement] directly from a [TwoPointMeasurementResult].
+  factory DicomDistanceMeasurement.fromResult({
+    required TwoPointMeasurementResult result,
+    required int frameIndex,
+  }) {
+    return DicomDistanceMeasurement(
+      start: result.start,
+      end: result.end,
+      frameIndex: frameIndex,
+      deltaPixelX: result.deltaPixelX,
+      deltaPixelY: result.deltaPixelY,
+      pixelDistance: result.pixelDistance,
+      deltaPhysicalXMm: result.deltaPhysicalXMm,
+      deltaPhysicalYMm: result.deltaPhysicalYMm,
+      physicalDistanceMm: result.physicalDistanceMm,
+      isValid: result.isValid,
+    );
+  }
+
+  /// Computes a [DicomDistanceMeasurement] from two continuous [ImagePoint]s and image [geometry]
+  /// via [ImageCoordinateTransform].
   factory DicomDistanceMeasurement.fromPoints({
     required ImagePoint start,
     required ImagePoint end,
     required int frameIndex,
     required DicomImageGeometry geometry,
   }) {
-    final dxPx = end.pixelX - start.pixelX;
-    final dyPx = end.pixelY - start.pixelY;
-    final pixelDist = math.sqrt(dxPx * dxPx + dyPx * dyPx);
-
-    final isValid = start.isInsideImage && end.isInsideImage;
-
-    double? dxMm;
-    double? dyMm;
-    double? distMm;
-
-    if (geometry.hasPhysicalSpacing) {
-      dxMm = dxPx * geometry.columnSpacing!;
-      dyMm = dyPx * geometry.rowSpacing!;
-      distMm = math.sqrt(dxMm * dxMm + dyMm * dyMm);
-    }
-
-    return DicomDistanceMeasurement(
-      start: start,
-      end: end,
+    final transform = ImageCoordinateTransform(
+      geometry: geometry,
+      viewportSize: const Size(0, 0),
+    );
+    final result = transform.measureBetweenImagePoints(start, end);
+    return DicomDistanceMeasurement.fromResult(
+      result: result,
       frameIndex: frameIndex,
-      deltaPixelX: dxPx,
-      deltaPixelY: dyPx,
-      pixelDistance: pixelDist,
-      deltaPhysicalXMm: dxMm,
-      deltaPhysicalYMm: dyMm,
-      physicalDistanceMm: distMm,
-      isValid: isValid,
     );
   }
 

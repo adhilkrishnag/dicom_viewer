@@ -74,6 +74,8 @@ class DicomImageWidget extends StatefulWidget {
   State<DicomImageWidget> createState() => _DicomImageWidgetState();
 }
 
+enum _MeasurementEndpoint { start, end }
+
 class _DicomImageWidgetState extends State<DicomImageWidget> {
   late double _windowCenter;
   late double _windowWidth;
@@ -93,8 +95,17 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
   /// In-progress distance measurement currently being dragged on the active frame.
   DicomDistanceMeasurement? _inProgressMeasurement;
 
+  /// Viewport position where the initial pointer down was received.
+  Offset? _measureDragDownViewport;
+
   /// Viewport position where the current measurement drag gesture started.
   Offset? _measureDragStartViewport;
+
+  /// Fixed anchor point when adjusting an existing measurement's endpoint.
+  ImagePoint? _measureDragFixedAnchor;
+
+  /// Which endpoint is currently being adjusted, or null if creating a new measurement.
+  _MeasurementEndpoint? _measureDragEditingEndpoint;
 
   @override
   void initState() {
@@ -113,11 +124,17 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
       _transformationController.value = Matrix4.identity();
       _measurements.clear();
       _inProgressMeasurement = null;
+      _measureDragDownViewport = null;
       _measureDragStartViewport = null;
+      _measureDragFixedAnchor = null;
+      _measureDragEditingEndpoint = null;
       _renderImage();
     } else if (oldWidget.frameIndex != widget.frameIndex) {
       _inProgressMeasurement = null;
+      _measureDragDownViewport = null;
       _measureDragStartViewport = null;
+      _measureDragFixedAnchor = null;
+      _measureDragEditingEndpoint = null;
       _renderImage();
     }
   }
@@ -238,19 +255,76 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     unawaited(_renderImage());
   }
 
+  void _onMeasurePanDown(DragDownDetails details) {
+    _measureDragDownViewport = details.localPosition;
+  }
+
   void _onMeasurePanStart(
     DragStartDetails details,
     ImageCoordinateTransform transform,
   ) {
-    final startPoint = transform.viewportToImage(details.localPosition);
-    _measureDragStartViewport = details.localPosition;
+    final downPos = _measureDragDownViewport ?? details.localPosition;
+    final existing = _measurements[widget.frameIndex];
+    if (existing != null && existing.isValid) {
+      final startVp = transform.pixelToViewport(
+        Offset(existing.start.pixelX, existing.start.pixelY),
+      );
+      final endVp = transform.pixelToViewport(
+        Offset(existing.end.pixelX, existing.end.pixelY),
+      );
+      const hitRadius = 24.0;
+      final distToStart = (downPos - startVp).distance;
+      final distToEnd = (downPos - endVp).distance;
+
+      if (distToStart <= hitRadius && distToStart <= distToEnd) {
+        _measureDragEditingEndpoint = _MeasurementEndpoint.start;
+        _measureDragFixedAnchor = existing.end;
+        _measureDragStartViewport = null;
+        final movingPoint = transform.viewportToImage(details.localPosition);
+        final result = transform.measureBetweenImagePoints(
+          movingPoint,
+          existing.end,
+        );
+        setState(() {
+          _inProgressMeasurement = DicomDistanceMeasurement.fromResult(
+            result: result,
+            frameIndex: widget.frameIndex,
+          );
+        });
+        return;
+      } else if (distToEnd <= hitRadius) {
+        _measureDragEditingEndpoint = _MeasurementEndpoint.end;
+        _measureDragFixedAnchor = existing.start;
+        _measureDragStartViewport = null;
+        final movingPoint = transform.viewportToImage(details.localPosition);
+        final result = transform.measureBetweenImagePoints(
+          existing.start,
+          movingPoint,
+        );
+        setState(() {
+          _inProgressMeasurement = DicomDistanceMeasurement.fromResult(
+            result: result,
+            frameIndex: widget.frameIndex,
+          );
+        });
+        return;
+      }
+    }
+
+    _measureDragEditingEndpoint = null;
+    _measureDragFixedAnchor = null;
+    _measureDragStartViewport = downPos;
+    final startPoint = transform.viewportToImage(downPos);
+    final currentPoint = transform.viewportToImage(details.localPosition);
+    final result = transform.measureBetweenImagePoints(
+      startPoint,
+      currentPoint,
+    );
 
     setState(() {
-      _inProgressMeasurement = DicomDistanceMeasurement.fromPoints(
-        start: startPoint,
-        end: startPoint,
+      _inProgressMeasurement = DicomDistanceMeasurement.fromResult(
+        result: result,
         frameIndex: widget.frameIndex,
-        geometry: transform.geometry,
       );
     });
   }
@@ -259,19 +333,44 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     DragUpdateDetails details,
     ImageCoordinateTransform transform,
   ) {
-    if (_measureDragStartViewport == null) return;
-
-    final startPoint = transform.viewportToImage(_measureDragStartViewport!);
-    final currentPoint = transform.viewportToImage(details.localPosition);
-
-    setState(() {
-      _inProgressMeasurement = DicomDistanceMeasurement.fromPoints(
-        start: startPoint,
-        end: currentPoint,
-        frameIndex: widget.frameIndex,
-        geometry: transform.geometry,
+    if (_measureDragEditingEndpoint == _MeasurementEndpoint.start) {
+      final movingPoint = transform.viewportToImage(details.localPosition);
+      final result = transform.measureBetweenImagePoints(
+        movingPoint,
+        _measureDragFixedAnchor!,
       );
-    });
+      setState(() {
+        _inProgressMeasurement = DicomDistanceMeasurement.fromResult(
+          result: result,
+          frameIndex: widget.frameIndex,
+        );
+      });
+    } else if (_measureDragEditingEndpoint == _MeasurementEndpoint.end) {
+      final movingPoint = transform.viewportToImage(details.localPosition);
+      final result = transform.measureBetweenImagePoints(
+        _measureDragFixedAnchor!,
+        movingPoint,
+      );
+      setState(() {
+        _inProgressMeasurement = DicomDistanceMeasurement.fromResult(
+          result: result,
+          frameIndex: widget.frameIndex,
+        );
+      });
+    } else if (_measureDragStartViewport != null) {
+      final startPoint = transform.viewportToImage(_measureDragStartViewport!);
+      final currentPoint = transform.viewportToImage(details.localPosition);
+      final result = transform.measureBetweenImagePoints(
+        startPoint,
+        currentPoint,
+      );
+      setState(() {
+        _inProgressMeasurement = DicomDistanceMeasurement.fromResult(
+          result: result,
+          frameIndex: widget.frameIndex,
+        );
+      });
+    }
   }
 
   void _onMeasurePanEnd(
@@ -283,14 +382,20 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     }
     setState(() {
       _inProgressMeasurement = null;
+      _measureDragDownViewport = null;
       _measureDragStartViewport = null;
+      _measureDragFixedAnchor = null;
+      _measureDragEditingEndpoint = null;
     });
   }
 
   void _onMeasurePanCancel() {
     setState(() {
       _inProgressMeasurement = null;
+      _measureDragDownViewport = null;
       _measureDragStartViewport = null;
+      _measureDragFixedAnchor = null;
+      _measureDragEditingEndpoint = null;
     });
   }
 
@@ -301,6 +406,8 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
         _transformationController.value = Matrix4.identity();
         _inProgressMeasurement = null;
         _measureDragStartViewport = null;
+        _measureDragFixedAnchor = null;
+        _measureDragEditingEndpoint = null;
       });
       unawaited(_renderImage());
     } else {
@@ -308,6 +415,8 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
         _transformationController.value = Matrix4.identity();
         _inProgressMeasurement = null;
         _measureDragStartViewport = null;
+        _measureDragFixedAnchor = null;
+        _measureDragEditingEndpoint = null;
       });
     }
   }
@@ -392,23 +501,27 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
           }
         }
 
+        final GestureDragDownCallback? panDown;
         final GestureDragStartCallback? panStart;
         final GestureDragUpdateCallback? panUpdate;
         final GestureDragEndCallback? panEnd;
         final GestureDragCancelCallback? panCancel;
 
         if (widget.tool == DicomTool.measure) {
+          panDown = _onMeasurePanDown;
           panStart = (details) => _onMeasurePanStart(details, transform);
           panUpdate = (details) => _onMeasurePanUpdate(details, transform);
           panEnd = (details) => _onMeasurePanEnd(details, transform);
           panCancel = _onMeasurePanCancel;
         } else if (widget.tool == DicomTool.windowing || !widget.enableZoom) {
+          panDown = null;
           panStart = null;
           panUpdate = _onPanUpdate;
           panEnd = null;
           panCancel = null;
         } else {
           // DicomTool.pan with enableZoom == true -> handled by InteractiveViewer
+          panDown = null;
           panStart = null;
           panUpdate = null;
           panEnd = null;
@@ -423,6 +536,7 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
               Positioned.fill(
                 child: GestureDetector(
                   key: const Key('dicom_windowing_gesture'),
+                  onPanDown: panDown,
                   onPanStart: panStart,
                   onPanUpdate: panUpdate,
                   onPanEnd: panEnd,
@@ -436,12 +550,20 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
               // Distance Measurement Overlay
               if (viewportSize.width > 0 && viewportSize.height > 0)
                 Positioned.fill(
-                  child: IgnorePointer(
-                    child: CustomPaint(
-                      size: viewportSize,
-                      painter: DistanceMeasurementPainter(
-                        measurement: activeMeasurement,
-                        transform: transform,
+                  child: Semantics(
+                    label:
+                        activeMeasurement != null && activeMeasurement.isValid
+                            ? (activeMeasurement.hasPhysicalMeasurement
+                                ? 'Distance measurement: ${activeMeasurement.physicalDistanceMm!.toStringAsFixed(1)} millimeters'
+                                : 'Distance measurement: ${activeMeasurement.pixelDistance.toStringAsFixed(1)} pixels')
+                            : null,
+                    child: IgnorePointer(
+                      child: CustomPaint(
+                        size: viewportSize,
+                        painter: DistanceMeasurementPainter(
+                          measurement: activeMeasurement,
+                          transform: transform,
+                        ),
                       ),
                     ),
                   ),
