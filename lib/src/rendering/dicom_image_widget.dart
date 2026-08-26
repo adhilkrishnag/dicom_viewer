@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../geometry/dicom_image_geometry.dart';
+import '../geometry/dicom_probe_painter.dart';
 import '../geometry/dicom_roi_statistics_engine.dart';
 import '../geometry/distance_measurement.dart';
 import '../geometry/distance_measurement_painter.dart';
@@ -26,6 +27,9 @@ enum DicomTool {
 
   /// Drag gestures draw a rectangular Region of Interest on the image.
   rectangleRoi,
+
+  /// Hovering or moving pointer inspects pixel coordinates, stored values, and modality/HU data.
+  probe,
 }
 
 /// Interactive Flutter widget that renders a DICOM image and provides real-time
@@ -125,6 +129,15 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
   /// Viewport position where the ROI drag gesture started (first corner).
   Offset? _roiDragStartViewport;
 
+  /// Active pixel probe result at the current hovered pixel coordinate.
+  DicomProbeResult? _probeResult;
+
+  /// Viewport position of the active probe cursor.
+  Offset? _probeViewportPosition;
+
+  /// Ephemeral cached stored pixel buffer for the currently active frame index.
+  List<int>? _activeProbeFramePixels;
+
   @override
   void initState() {
     super.initState();
@@ -150,6 +163,9 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
       _inProgressRoi = null;
       _roiDragDownViewport = null;
       _roiDragStartViewport = null;
+      _probeResult = null;
+      _probeViewportPosition = null;
+      _activeProbeFramePixels = null;
       _renderImage();
     } else if (oldWidget.frameIndex != widget.frameIndex) {
       _inProgressMeasurement = null;
@@ -160,7 +176,14 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
       _inProgressRoi = null;
       _roiDragDownViewport = null;
       _roiDragStartViewport = null;
+      _probeResult = null;
+      _probeViewportPosition = null;
+      _activeProbeFramePixels = null;
       _renderImage();
+    } else if (oldWidget.tool != widget.tool) {
+      _probeResult = null;
+      _probeViewportPosition = null;
+      _activeProbeFramePixels = null;
     }
   }
 
@@ -171,6 +194,9 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     _renderGeneration++;
     _renderedImage?.dispose();
     _renderedImage = null;
+    _probeResult = null;
+    _probeViewportPosition = null;
+    _activeProbeFramePixels = null;
     super.dispose();
   }
 
@@ -523,6 +549,65 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     }
   }
 
+  void _onProbeHover(Offset localPosition, ImageCoordinateTransform transform) {
+    final imagePoint = transform.viewportToImage(localPosition);
+    final cols = widget.dataset.columns;
+    final rows = widget.dataset.rows;
+
+    if (imagePoint.pixelX < 0.0 ||
+        imagePoint.pixelX >= cols ||
+        imagePoint.pixelY < 0.0 ||
+        imagePoint.pixelY >= rows ||
+        cols <= 0 ||
+        rows <= 0) {
+      if (_probeResult != null) {
+        setState(() {
+          _probeResult = null;
+          _probeViewportPosition = null;
+        });
+      }
+      return;
+    }
+
+    final pixelColumn = imagePoint.pixelX.floor();
+    final pixelRow = imagePoint.pixelY.floor();
+
+    try {
+      _activeProbeFramePixels ??= DicomRoiStatisticsEngine.extractFramePixels(
+        widget.dataset,
+        widget.frameIndex,
+      );
+
+      final result = DicomProbeResult.evaluate(
+        dataset: widget.dataset,
+        pixelColumn: pixelColumn,
+        pixelRow: pixelRow,
+        rawPixels: _activeProbeFramePixels!,
+      );
+
+      setState(() {
+        _probeResult = result;
+        _probeViewportPosition = localPosition;
+      });
+    } catch (_) {
+      if (_probeResult != null) {
+        setState(() {
+          _probeResult = null;
+          _probeViewportPosition = null;
+        });
+      }
+    }
+  }
+
+  void _onProbeExit() {
+    if (_probeResult != null || _probeViewportPosition != null) {
+      setState(() {
+        _probeResult = null;
+        _probeViewportPosition = null;
+      });
+    }
+  }
+
   int _lastTapTime = 0;
 
   void _onTapDown(TapDownDetails details) {
@@ -629,7 +714,7 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
           panEnd = null;
           panCancel = null;
         } else {
-          // DicomTool.pan with enableZoom == true -> handled by InteractiveViewer
+          // DicomTool.pan / DicomTool.probe with enableZoom == true
           panDown = null;
           panStart = null;
           panUpdate = null;
@@ -641,18 +726,29 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
           color: Colors.black,
           child: Stack(
             children: [
-              // Image canvas with gesture handling
+              // Image canvas with gesture and hover handling
               Positioned.fill(
-                child: GestureDetector(
-                  key: const Key('dicom_windowing_gesture'),
-                  onPanDown: panDown,
-                  onPanStart: panStart,
-                  onPanUpdate: panUpdate,
-                  onPanEnd: panEnd,
-                  onPanCancel: panCancel,
-                  onTapDown: _onTapDown,
-                  behavior: HitTestBehavior.opaque,
-                  child: imageContent,
+                child: MouseRegion(
+                  onHover:
+                      widget.tool == DicomTool.probe
+                          ? (event) =>
+                              _onProbeHover(event.localPosition, transform)
+                          : null,
+                  onExit:
+                      widget.tool == DicomTool.probe
+                          ? (event) => _onProbeExit()
+                          : null,
+                  child: GestureDetector(
+                    key: const Key('dicom_windowing_gesture'),
+                    onPanDown: panDown,
+                    onPanStart: panStart,
+                    onPanUpdate: panUpdate,
+                    onPanEnd: panEnd,
+                    onPanCancel: panCancel,
+                    onTapDown: _onTapDown,
+                    behavior: HitTestBehavior.opaque,
+                    child: imageContent,
+                  ),
                 ),
               ),
 
@@ -691,6 +787,28 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
                         size: viewportSize,
                         painter: RectangleRoiPainter(
                           measurement: activeRoi,
+                          transform: transform,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+              // Pixel Probe Overlay
+              if (viewportSize.width > 0 &&
+                  viewportSize.height > 0 &&
+                  widget.tool == DicomTool.probe &&
+                  _probeResult != null &&
+                  _probeResult!.isInside)
+                Positioned.fill(
+                  child: Semantics(
+                    label: _probeResult!.semanticsLabel,
+                    child: IgnorePointer(
+                      child: CustomPaint(
+                        size: viewportSize,
+                        painter: ProbeOverlayPainter(
+                          probeResult: _probeResult,
+                          viewportPosition: _probeViewportPosition,
                           transform: transform,
                         ),
                       ),
@@ -792,6 +910,18 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
                           'Tool: Rectangle ROI (Drag to draw region of interest)',
                           style: TextStyle(
                             color: Colors.yellowAccent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            shadows: [
+                              Shadow(blurRadius: 4, color: Colors.black),
+                            ],
+                          ),
+                        ),
+                      ] else if (widget.tool == DicomTool.probe) ...[
+                        const Text(
+                          'Tool: Pixel Probe (Hover over image to inspect pixel values)',
+                          style: TextStyle(
+                            color: Colors.cyanAccent,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             shadows: [

@@ -353,6 +353,14 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                               style: TextStyle(fontSize: 11),
                             ),
                           ),
+                          ButtonSegment<DicomTool>(
+                            value: DicomTool.probe,
+                            icon: Icon(Icons.colorize, size: 14),
+                            label: Text(
+                              'Probe',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                          ),
                         ],
                         selected: {_selectedTool},
                         onSelectionChanged: (newSelection) {
