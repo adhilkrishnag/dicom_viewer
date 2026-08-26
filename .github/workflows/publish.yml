@@ -1,0 +1,94 @@
+name: Publish to pub.dev
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+
+jobs:
+  release-check:
+    name: Validate Release Candidate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.8'
+          cache: true
+
+      - name: Validate Tag Syntax & Pubspec Version Match
+        run: |
+          TAG_NAME="${GITHUB_REF_NAME}"
+          echo "Evaluating release tag: ${TAG_NAME}"
+          
+          if [[ ! "${TAG_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '${TAG_NAME}' does not match semver pattern vX.Y.Z"
+            exit 1
+          fi
+          
+          PUBSPEC_VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | tr -d '\r')
+          EXPECTED_TAG="v${PUBSPEC_VERSION}"
+          if [ "${TAG_NAME}" != "${EXPECTED_TAG}" ]; then
+            echo "::error::Tag '${TAG_NAME}' does not match pubspec.yaml version '${PUBSPEC_VERSION}' (expected '${EXPECTED_TAG}')"
+            exit 1
+          fi
+          echo "Tag and pubspec.yaml versions are synchronized: ${TAG_NAME}"
+
+      - name: Validate Main Branch Ancestry
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::Tagged commit ${GITHUB_SHA} is not reachable from origin/main. Releases must be merged into main before tagging."
+            exit 1
+          fi
+          echo "Tagged commit is verified on main branch."
+
+      - name: Check if Version Already Published
+        run: |
+          PUBSPEC_VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | tr -d '\r')
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://pub.dev/api/packages/dicom_viewer/versions/${PUBSPEC_VERSION}")
+          if [ "${HTTP_STATUS}" -eq 200 ]; then
+            echo "::error::Package version ${PUBSPEC_VERSION} is already published on pub.dev!"
+            exit 1
+          elif [ "${HTTP_STATUS}" -eq 404 ]; then
+            echo "Version ${PUBSPEC_VERSION} is not published yet (HTTP 404 confirmed). Proceeding with release."
+          else
+            echo "::error::Unexpected HTTP status ${HTTP_STATUS} when querying pub.dev API for version ${PUBSPEC_VERSION}. Aborting for safety."
+            exit 1
+          fi
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Verify Code Formatting & Whitespace
+        run: |
+          dart format --output=none --set-exit-if-changed .
+          git diff --check
+
+      - name: Run Static Analysis
+        run: flutter analyze
+
+      - name: Run Full Test Suite
+        run: flutter test --concurrency=1
+
+      - name: Validate Package Dry-Run
+        run: flutter pub publish --dry-run
+
+  publish:
+    name: Publish to pub.dev (OIDC)
+    needs: release-check
+    permissions:
+      id-token: write
+      contents: read
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      environment: pub.dev
