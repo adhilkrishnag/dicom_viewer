@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.4.0
+
+- **2D Distance Measurement Caliper Tool (`DicomTool.measure`)**:
+  - Interactive distance caliper measurement on the 2D DICOM image plane.
+  - Computes Euclidean physical distance in millimeters ($mm$) when `Pixel Spacing (0028,0030)` is present.
+  - Safe fallback to pixel distance ($px$) when physical spacing is absent or invalid.
+  - Interactive endpoint adjustment, endpoint hit-testing, zoom/pan invariance, and screen-reader accessibility semantics.
+- **2D Rectangle Region of Interest (ROI) (`DicomTool.rectangleRoi`)**:
+  - Interactive rectangular ROI creation with automatic corner normalization.
+  - Reports physical dimensions ($W \times H$ in $mm$, Area in $mm^2$) or pixel fallback ($W \times H$ in $px$, Area in $px^2$).
+  - Strict image boundary validation without silent clamping.
+- **Quantitative ROI Pixel Statistics & Hounsfield Units (HU)**:
+  - Quantitative statistics engine evaluating discrete pixels enclosed by ROI boundaries.
+  - Calculates Mean, Population Standard Deviation ($\sigma_N$, denominator $N$), Min, Max, Median, and Pixel Count.
+  - Verified Hounsfield Unit ($HU$) statistics on CT datasets with explicit valid Rescale Slope ($>0$) and Intercept.
+  - Unitless intensity statistics on non-CT modalities (MR, CR, DX, US) with zero invented units or false `px` intensity suffixes.
+  - Pre-rescale Pixel Padding Value (`0028,0120`) and Range Limit (`0028,0121`) exclusion in stored pixel space.
+  - Per-frame statistics caching computed strictly on pointer release without background rendering overhead.
+- **Pixel Probe Tool (`DicomTool.probe`)**:
+  - Real-time hover inspection overlay showing discrete pixel coordinate $(c, r)$, stored scalar intensity, and modality/HU rescaled values.
+  - Multi-channel RGB triplet and palette index inspection for PALETTE COLOR and RGB datasets.
+  - Ephemeral current-frame buffer caching ($O(1)$ lookup per hover event) without full-image re-decoding.
+- **Internal 2D Image Geometry & Safe Fallback Architecture**:
+  - Canonical `DicomImageGeometry` and `ImageCoordinateTransform` models.
+  - Strict geometry fallback classification: Verified Physical Spacing $\to$ Display-Only Pixel Aspect Ratio (`0028,0034`) $\to$ Native Matrix Fallback.
+  - Enforces that Pixel Aspect Ratio corrects display aspect ratio only and is strictly prohibited from inventing physical distance scales.
+- **Frame-Aware Measurement State & Isolation**:
+  - Strict per-frame isolation across Distance Measurements, ROIs, Statistics, and Probe buffers.
+  - Frame navigation and tool switching preserve per-frame state without cross-frame leakage.
+  - Dataset changes cleanly invalidate and reset all measurement and probe caches.
+- **100% Public API DartDoc Coverage**:
+  - Complete DartDoc documentation with standard citations and mathematical formulas across all public symbols.
+- **Important Semantics & Limitations**:
+  - Physical measurements ($mm, mm^2$) strictly require verified, finite, positive `Pixel Spacing (0028,0030)`.
+  - `Pixel Aspect Ratio (0028,0034)` provides display aspect ratio correction only and never establishes physical scale.
+  - Native matrix fallback operates in pure pixel space ($px, px^2$).
+  - Hounsfield Units ($HU$) require valid explicit CT rescale metadata; missing or non-positive rescale slopes cleanly fall back to stored unitless scalar values.
+  - Pixel Padding is excluded in stored-pixel space before modality rescale calculation.
+  - Intensity statistics for MR, CR, DX, and other non-CT modalities remain unitless without invented units or $px$ suffixes.
+  - 3D spatial geometry (Image Position / Image Orientation Patient slice reconstruction), MPR, 3D volume rendering, DICOM Structured Reporting (SR), and Grayscale Softcopy Presentation State (GSPS) are out of scope.
+
 ## 0.3.0
 
 - **Real-World DICOM RLE Lossless Fixture Validation**:
