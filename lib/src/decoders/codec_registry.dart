@@ -5,12 +5,14 @@ import '../parsing/tag.dart';
 import '../parsing/transfer_syntax.dart';
 import '../pixel_data/pixel_data_info.dart';
 import 'frame_codec.dart';
+import 'jpeg_lossless_decoder.dart';
 import 'rle_frame_codec.dart';
 
 /// Internal registry and dispatcher for DICOM transfer syntax codecs.
 class CodecRegistry {
   static const Map<String, DicomFrameCodec> _codecs = {
     TransferSyntax.rleLossless: RleFrameCodec(),
+    TransferSyntax.jpegLosslessSV1: JpegLosslessDecoder(),
   };
 
   /// Returns the [DicomFrameCodec] registered for [transferSyntaxUid],
