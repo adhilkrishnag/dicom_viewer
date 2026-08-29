@@ -1,12 +1,9 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'package:flutter/widgets.dart';
 
-import '../decoders/rle_decoder.dart';
-import '../decoders/rle_framing_strategy.dart';
+import '../decoders/codec_registry.dart';
 import '../parsing/dicom_dataset.dart';
 import '../parsing/tag.dart';
-import '../parsing/transfer_syntax.dart';
 import '../pixel_data/pixel_data_decoder.dart';
 import '../pixel_data/pixel_data_info.dart';
 import '../windowing/photometric.dart';
@@ -147,83 +144,10 @@ class DicomRoiStatisticsEngine {
   /// Extracts and decodes the mathematical stored pixel values for [frameIndex]
   /// reusing existing package decoders.
   static List<int> extractFramePixels(DicomDataset dataset, int frameIndex) {
-    final pixelElem = dataset.getElement(DicomTag.pixelData);
-    if (pixelElem == null) {
-      throw StateError('DICOM Dataset contains no Pixel Data (7FE0,0010).');
-    }
-
-    final encData = dataset.encapsulatedData;
-    final rawPixelBytes = dataset.pixelDataBytes;
-
-    if (encData != null && encData.fragments.isEmpty) {
-      throw const FormatException(
-        'Encapsulated Pixel Data (7FE0,0010) contains no item fragments.',
-      );
-    }
-
-    if (encData == null && (rawPixelBytes == null || rawPixelBytes.isEmpty)) {
-      throw StateError('DICOM Dataset contains no Pixel Data (7FE0,0010).');
-    }
-
-    final totalFrames = dataset.numberOfFrames;
-    if (frameIndex < 0 || (totalFrames > 0 && frameIndex >= totalFrames)) {
-      throw RangeError(
-        'Invalid frameIndex $frameIndex (total frames: $totalFrames).',
-      );
-    }
-
-    final tsUid = dataset.transferSyntaxUid;
-    final tsDetails = TransferSyntaxDetails.fromUid(tsUid);
-
-    Uint8List effectivePixelBytes;
-
-    if (tsUid == TransferSyntax.rleLossless) {
-      if (encData == null) {
-        throw const FormatException(
-          'Invalid RLE DICOM data: Pixel Data (7FE0,0010) is explicit length. '
-          'RLE Lossless requires encapsulated undefined length data per DICOM PS3.5.',
-        );
-      }
-      final framePayload = RleFramingStrategy.extractFramePayload(
-        encData,
-        frameIndex: frameIndex,
-        numberOfFrames: dataset.numberOfFrames,
-      );
-      effectivePixelBytes = RleDecoder.decodeFrame(
-        rleFrameBytes: framePayload,
-        width: dataset.columns,
-        height: dataset.rows,
-        bitsAllocated: dataset.bitsAllocated,
-        samplesPerPixel: dataset.samplesPerPixel,
-      );
-    } else {
-      final bytes = rawPixelBytes ?? Uint8List(0);
-      if (tsDetails.isEncapsulated) {
-        throw UnsupportedError(
-          'Unsupported Transfer Syntax: ${tsDetails.name} ($tsUid). v0.2.0 supports uncompressed and RLE Lossless DICOM files.',
-        );
-      }
-      final bytesPerSample = (dataset.bitsAllocated + 7) ~/ 8;
-      final bytesPerFrame =
-          dataset.rows *
-          dataset.columns *
-          dataset.samplesPerPixel *
-          bytesPerSample;
-      final frameStart = frameIndex * bytesPerFrame;
-      if (frameStart >= bytes.length && totalFrames > 1) {
-        throw FormatException(
-          'Frame $frameIndex start offset $frameStart exceeds pixel data length (${bytes.length} bytes).',
-        );
-      }
-      final frameEnd = (frameStart + bytesPerFrame).clamp(
-        frameStart,
-        bytes.length,
-      );
-      effectivePixelBytes =
-          (bytesPerFrame > 0 && frameStart < bytes.length)
-              ? bytes.sublist(frameStart, frameEnd)
-              : bytes;
-    }
+    final effectivePixelBytes = CodecRegistry.extractEffectivePixelBytes(
+      dataset,
+      frameIndex: frameIndex,
+    );
 
     final info = PixelDataInfo.fromDataset(dataset);
     const decoder = PixelDataDecoder();
