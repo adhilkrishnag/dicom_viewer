@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dicom_viewer/dicom_viewer.dart';
 import 'package:dicom_viewer/src/decoders/codec_registry.dart';
+import 'package:dicom_viewer/src/decoders/jpeg_baseline_decoder.dart';
 import 'package:dicom_viewer/src/decoders/rle_frame_codec.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -14,6 +15,13 @@ void main() {
       expect(codec, isNotNull);
       expect(codec, isA<RleFrameCodec>());
       expect(CodecRegistry.hasCodec(TransferSyntax.rleLossless), isTrue);
+    });
+
+    test('Resolves JpegBaselineDecoder for JPEG Baseline transfer syntax', () {
+      final codec = CodecRegistry.getCodec(TransferSyntax.jpegBaseline);
+      expect(codec, isNotNull);
+      expect(codec, isA<JpegBaselineDecoder>());
+      expect(CodecRegistry.hasCodec(TransferSyntax.jpegBaseline), isTrue);
     });
 
     test('Returns null for uncompressed native transfer syntaxes', () {
@@ -43,7 +51,7 @@ void main() {
           SyntheticDicomGenerator.create(
             width: 16,
             height: 16,
-            transferSyntaxUid: TransferSyntax.jpegBaseline,
+            transferSyntaxUid: '1.2.840.10008.1.2.4.51',
             rawEncapsulatedBytes: dummyBytes,
           ),
         );
@@ -54,7 +62,7 @@ void main() {
             isA<UnsupportedError>().having(
               (e) => e.message,
               'message',
-              contains('JPEG Baseline'),
+              contains('JPEG Extended'),
             ),
           ),
         );

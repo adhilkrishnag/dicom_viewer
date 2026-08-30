@@ -73,7 +73,7 @@ void main() {
     );
 
     test(
-      'DicomRenderer throws UnsupportedError on JPEG Baseline (1.2.840.10008.1.2.4.50) without falling through to native codec',
+      'DicomRenderer throws UnsupportedError on JPEG Extended (1.2.840.10008.1.2.4.51) without falling through to native codec',
       () async {
         final dummyJpegBytes = Uint8List.fromList([
           0xFF,
@@ -92,7 +92,7 @@ void main() {
         final bytes = SyntheticDicomGenerator.create(
           width: 16,
           height: 16,
-          transferSyntaxUid: TransferSyntax.jpegBaseline,
+          transferSyntaxUid: '1.2.840.10008.1.2.4.51',
           rawEncapsulatedBytes: dummyJpegBytes,
         );
 
