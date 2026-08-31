@@ -128,10 +128,97 @@ class JpegFramingStrategy {
     }
 
     // Multi-frame with multiple fragments per frame and empty BOT
-    throw UnsupportedError(
-      'Encapsulated multi-frame JPEG with ${fragments.length} fragments for $numberOfFrames frames '
-      'and empty Basic Offset Table requires marker-based stream scanning or Extended Offset Table, '
-      'which is not supported.',
+    return _extractFrameByMarkerScan(
+      encapsulatedData.flatBytes,
+      frameIndex: frameIndex,
+      numberOfFrames: numberOfFrames,
+    );
+  }
+
+  /// Extracts a frame by scanning concatenated fragment payloads for standard JPEG
+  /// Start of Image (`0xFF 0xD8`) and End of Image (`0xFF 0xD9`) markers.
+  static Uint8List _extractFrameByMarkerScan(
+    Uint8List flatBytes, {
+    required int frameIndex,
+    required int numberOfFrames,
+  }) {
+    final n = flatBytes.length;
+    int idx = 0;
+    int currentFrame = 0;
+
+    while (idx < n && currentFrame <= frameIndex) {
+      // Find SOI marker (0xFF 0xD8)
+      int soiIdx = -1;
+      while (idx < n - 1) {
+        if (flatBytes[idx] == 0xFF && flatBytes[idx + 1] == 0xD8) {
+          soiIdx = idx;
+          idx += 2;
+          break;
+        }
+        idx++;
+      }
+
+      if (soiIdx == -1) {
+        throw FormatException(
+          'Failed to locate JPEG SOI marker for frame $currentFrame of $numberOfFrames.',
+        );
+      }
+
+      // Find EOI marker (0xFF 0xD9)
+      int eoiEnd = -1;
+      while (idx < n - 1) {
+        if (flatBytes[idx] == 0xFF) {
+          // Skip consecutive 0xFF fill bytes
+          int j = idx + 1;
+          while (j < n && flatBytes[j] == 0xFF) {
+            j++;
+          }
+          if (j >= n) break;
+
+          final marker = flatBytes[j];
+          if (marker == 0x00) {
+            // Byte-stuffed 0xFF 0x00 literal byte in entropy-coded scan
+            idx = j + 1;
+            continue;
+          } else if (marker >= 0xD0 && marker <= 0xD7) {
+            // RSTm restart marker in scan
+            idx = j + 1;
+            continue;
+          } else if (marker == 0xD9) {
+            // EOI (End of Image) terminates current frame
+            eoiEnd = j + 1;
+            idx = j + 1;
+            break;
+          } else if (marker == 0xD8) {
+            // Next frame SOI encountered without explicit EOI
+            eoiEnd = idx;
+            break;
+          } else {
+            // Variable length marker segment (e.g. SOF, DQT, DHT, APP)
+            if (j + 2 < n && marker != 0xDA) {
+              final segLen = (flatBytes[j + 1] << 8) | flatBytes[j + 2];
+              if (segLen >= 2 && j + 1 + segLen <= n) {
+                idx = j + 1 + segLen;
+                continue;
+              }
+            }
+            idx = j + 1;
+          }
+        } else {
+          idx++;
+        }
+      }
+
+      final frameEnd = (eoiEnd != -1) ? eoiEnd : n;
+      if (currentFrame == frameIndex) {
+        return Uint8List.sublistView(flatBytes, soiIdx, frameEnd);
+      }
+
+      currentFrame++;
+    }
+
+    throw FormatException(
+      'Could not extract frame $frameIndex (only found $currentFrame frames in stream).',
     );
   }
 }

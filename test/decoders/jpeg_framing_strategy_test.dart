@@ -270,43 +270,66 @@ void main() {
     );
 
     test(
-      'Throws UnsupportedError when multi-frame with empty BOT has multiple fragments per frame',
+      'Extracts multi-frame with empty BOT and multiple fragments per frame via marker scan',
       () {
+        // Frame 0: SOI + dummy APP0 + scan + EOI
+        final f0 = Uint8List.fromList([
+          0xFF, 0xD8, // SOI
+          0xFF, 0xE0, 0x00, 0x10, // APP0
+          0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00,
+          0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
+          0xAA, 0xFF, 0x00, 0x12, 0xAA,
+          0xFF, 0xD9, // EOI
+        ]);
+        // Frame 1: SOI + dummy APP0 + scan + EOI
+        final f1 = Uint8List.fromList([
+          0xFF, 0xD8, // SOI
+          0xFF, 0xE0, 0x00, 0x10, // APP0
+          0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00,
+          0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
+          0xBB, 0xFF, 0x00, 0x34, 0xBB,
+          0xFF, 0xD9, // EOI
+        ]);
+
         final encData = EncapsulatedPixelData(
           botOffsets: const [],
           fragments: [
             InternalFragment(
               index: 1,
               relativeTagStart: 0,
-              payload: Uint8List(4),
+              payload: Uint8List.sublistView(f0, 0, 10),
             ),
             InternalFragment(
               index: 2,
               relativeTagStart: 10,
-              payload: Uint8List(4),
+              payload: Uint8List.sublistView(f0, 10),
             ),
             InternalFragment(
               index: 3,
-              relativeTagStart: 20,
-              payload: Uint8List(4),
+              relativeTagStart: 30,
+              payload: Uint8List.sublistView(f1, 0, 10),
+            ),
+            InternalFragment(
+              index: 4,
+              relativeTagStart: 40,
+              payload: Uint8List.sublistView(f1, 10),
             ),
           ],
         );
 
-        expect(
-          () => JpegFramingStrategy.extractFramePayload(
-            encData,
-            frameIndex: 0,
-            numberOfFrames: 2,
-          ),
-          throwsA(
-            isA<UnsupportedError>().having(
-              (e) => e.message,
-              'message',
-              contains('requires marker-based stream scanning'),
-            ),
-          ),
+        final p0 = JpegFramingStrategy.extractFramePayload(
+          encData,
+          frameIndex: 0,
+          numberOfFrames: 2,
         );
+        final p1 = JpegFramingStrategy.extractFramePayload(
+          encData,
+          frameIndex: 1,
+          numberOfFrames: 2,
+        );
+
+        expect(p0, equals(f0));
+        expect(p1, equals(f1));
       },
     );
 
