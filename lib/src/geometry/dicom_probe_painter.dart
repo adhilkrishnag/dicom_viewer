@@ -71,6 +71,30 @@ class DicomProbeResult {
       }
     }
 
+    // YBR 3-sample handling (YBR_FULL, YBR_FULL_422, YBR_PARTIAL_422)
+    // Stored samples are [Y, Cb, Cr]; converts to display [R, G, B] per DICOM PS3.3 C.7.6.3.1.2
+    if (dataset.samplesPerPixel == 3 &&
+        photo == PhotometricInterpretation.ybrFull) {
+      final p = pixelRow * columns + pixelColumn;
+      final yIdx = p * 3;
+      if (yIdx + 2 < rawPixels.length) {
+        final double y = rawPixels[yIdx].toDouble();
+        final double cb = rawPixels[yIdx + 1].toDouble() - 128.0;
+        final double cr = rawPixels[yIdx + 2].toDouble() - 128.0;
+
+        final int r = (y + 1.402 * cr).round().clamp(0, 255);
+        final int g = (y - 0.344136 * cb - 0.714136 * cr).round().clamp(0, 255);
+        final int b = (y + 1.772 * cb).round().clamp(0, 255);
+
+        return DicomProbeResult(
+          pixelColumn: pixelColumn,
+          pixelRow: pixelRow,
+          isInside: true,
+          rgb: [r, g, b],
+        );
+      }
+    }
+
     final idx = pixelRow * columns + pixelColumn;
     if (idx >= rawPixels.length) {
       return DicomProbeResult(
