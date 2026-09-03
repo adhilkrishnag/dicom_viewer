@@ -104,7 +104,7 @@ class CodecRegistry {
     final bytes = rawPixelBytes ?? Uint8List(0);
     if (isCompressed(bytes, tsUid)) {
       throw UnsupportedError(
-        'Unsupported Transfer Syntax: ${tsDetails.name} ($tsUid). v0.2.0 supports uncompressed and RLE Lossless DICOM files.',
+        'Unsupported Transfer Syntax: ${tsDetails.name} ($tsUid).',
       );
     }
 

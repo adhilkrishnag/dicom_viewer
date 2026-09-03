@@ -44,7 +44,7 @@ void main() {
     });
 
     test(
-      'Throws UnsupportedError for unregistered compressed transfer syntaxes',
+      'Throws UnsupportedError for unregistered compressed transfer syntaxes with version-neutral message',
       () {
         final dummyBytes = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0]);
         final dataset = DicomDataset.fromBytes(
@@ -62,7 +62,9 @@ void main() {
             isA<UnsupportedError>().having(
               (e) => e.message,
               'message',
-              contains('JPEG Extended'),
+              equals(
+                'Unsupported Transfer Syntax: JPEG Extended (12-bit) (1.2.840.10008.1.2.4.51).',
+              ),
             ),
           ),
         );

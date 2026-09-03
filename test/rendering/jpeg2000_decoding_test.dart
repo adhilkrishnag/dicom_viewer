@@ -36,7 +36,7 @@ void main() {
     });
 
     test(
-      'DicomRenderer throws UnsupportedError on JPEG 2000 datasets (v1 out of scope)',
+      'DicomRenderer throws UnsupportedError on JPEG 2000 datasets (1.2.840.10008.1.2.4.91) with version-neutral message',
       () async {
         final dummyJ2kBytes = Uint8List.fromList([
           0xFF,
@@ -58,22 +58,46 @@ void main() {
 
         final dataset = DicomDataset.fromBytes(bytes);
 
-        // Verify synchronous RGBA rendering throws UnsupportedError
+        // Verify synchronous RGBA rendering throws UnsupportedError with version-neutral message
         expect(
           () => DicomRenderer.renderToRgba(dataset),
-          throwsA(isA<UnsupportedError>()),
+          throwsA(
+            isA<UnsupportedError>()
+                .having(
+                  (e) => e.message,
+                  'message',
+                  equals(
+                    'Unsupported Transfer Syntax: JPEG 2000 (1.2.840.10008.1.2.4.91).',
+                  ),
+                )
+                .having(
+                  (e) => e.message,
+                  'message',
+                  predicate<String?>(
+                    (msg) => msg != null && !msg.contains('v0.2.0'),
+                  ),
+                ),
+          ),
         );
 
         // Verify asynchronous image rendering throws UnsupportedError
         expect(
           () async => await DicomRenderer.renderToImage(dataset),
-          throwsA(isA<UnsupportedError>()),
+          throwsA(
+            isA<UnsupportedError>().having(
+              (e) => e.message,
+              'message',
+              equals(
+                'Unsupported Transfer Syntax: JPEG 2000 (1.2.840.10008.1.2.4.91).',
+              ),
+            ),
+          ),
         );
       },
     );
 
     test(
-      'DicomRenderer throws UnsupportedError on JPEG Extended (1.2.840.10008.1.2.4.51) without falling through to native codec',
+      'DicomRenderer throws UnsupportedError on JPEG Extended (1.2.840.10008.1.2.4.51) with version-neutral message',
       () async {
         final dummyJpegBytes = Uint8List.fromList([
           0xFF,
@@ -100,7 +124,15 @@ void main() {
 
         expect(
           () => DicomRenderer.renderToRgba(dataset),
-          throwsA(isA<UnsupportedError>()),
+          throwsA(
+            isA<UnsupportedError>().having(
+              (e) => e.message,
+              'message',
+              equals(
+                'Unsupported Transfer Syntax: JPEG Extended (12-bit) (1.2.840.10008.1.2.4.51).',
+              ),
+            ),
+          ),
         );
 
         expect(
@@ -111,7 +143,7 @@ void main() {
     );
 
     test(
-      'DicomRenderer throws UnsupportedError on JPEG 2000 Lossless (1.2.840.10008.1.2.4.90)',
+      'DicomRenderer throws UnsupportedError on JPEG 2000 Lossless (1.2.840.10008.1.2.4.90) with version-neutral message',
       () async {
         final dummyJ2kBytes = Uint8List.fromList([0xFF, 0x4F, 0xFF, 0x51]);
 
@@ -126,13 +158,83 @@ void main() {
 
         expect(
           () => DicomRenderer.renderToRgba(dataset),
-          throwsA(isA<UnsupportedError>()),
+          throwsA(
+            isA<UnsupportedError>().having(
+              (e) => e.message,
+              'message',
+              equals(
+                'Unsupported Transfer Syntax: JPEG 2000 (1.2.840.10008.1.2.4.90).',
+              ),
+            ),
+          ),
         );
 
         expect(
           () async => await DicomRenderer.renderToImage(dataset),
           throwsA(isA<UnsupportedError>()),
         );
+      },
+    );
+
+    test(
+      'DicomRenderer throws UnsupportedError on deferred JPEG Lossless Process 14 (1.2.840.10008.1.2.4.57) with version-neutral message',
+      () async {
+        final dummyBytes = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xC3]);
+
+        final bytes = SyntheticDicomGenerator.create(
+          width: 16,
+          height: 16,
+          transferSyntaxUid: '1.2.840.10008.1.2.4.57',
+          rawEncapsulatedBytes: dummyBytes,
+        );
+
+        final dataset = DicomDataset.fromBytes(bytes);
+
+        expect(
+          () => DicomRenderer.renderToRgba(dataset),
+          throwsA(
+            isA<UnsupportedError>().having(
+              (e) => e.message,
+              'message',
+              equals(
+                'Unsupported Transfer Syntax: JPEG Lossless (1.2.840.10008.1.2.4.57).',
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    test(
+      'DicomRenderer throws UnsupportedError on JPEG-LS (.80 and .81) with version-neutral message',
+      () async {
+        for (final uid in [
+          '1.2.840.10008.1.2.4.80',
+          '1.2.840.10008.1.2.4.81',
+        ]) {
+          final dummyBytes = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xF7]);
+          final bytes = SyntheticDicomGenerator.create(
+            width: 16,
+            height: 16,
+            transferSyntaxUid: uid,
+            rawEncapsulatedBytes: dummyBytes,
+          );
+
+          final dataset = DicomDataset.fromBytes(bytes);
+
+          expect(
+            () => DicomRenderer.renderToRgba(dataset),
+            throwsA(
+              isA<UnsupportedError>().having(
+                (e) => e.message,
+                'message',
+                equals(
+                  'Unsupported Transfer Syntax: Transfer Syntax $uid ($uid).',
+                ),
+              ),
+            ),
+          );
+        }
       },
     );
   });
