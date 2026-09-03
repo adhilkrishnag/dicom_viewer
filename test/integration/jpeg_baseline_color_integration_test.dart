@@ -198,5 +198,36 @@ void main() {
         expect(rgba1, equals(rgba2));
       },
     );
+
+    test(
+      'End-to-end production rendering on mismatched VR JPEG Baseline fixture (SC_rgb_jpeg.dcm)',
+      () async {
+        final file = File('test/fixtures/jpeg/SC_rgb_jpeg.dcm');
+        expect(file.existsSync(), isTrue);
+
+        // Path: DicomParser -> DicomDataset
+        final dataset = DicomDataset.fromBytes(file.readAsBytesSync());
+
+        expect(dataset.transferSyntaxUid, equals(TransferSyntax.jpegBaseline));
+        expect(dataset.rows, equals(256));
+        expect(dataset.columns, equals(256));
+        expect(dataset.samplesPerPixel, equals(3));
+        expect(dataset.photometricInterpretation, equals('RGB'));
+
+        // Path: DicomRenderer -> CodecRegistry -> JPEG Baseline decoder
+        // Must NOT throw "DICOM Dataset contains no Pixel Data (7FE0,0010)"
+        final rgba = DicomRenderer.renderToRgba(dataset);
+        expect(rgba.length, equals(256 * 256 * 4));
+
+        // 3-channel RGB characteristics: opaque alpha channel across pixels
+        expect(rgba[3], equals(255)); // Alpha of first pixel
+        expect(rgba[256 * 256 * 4 - 1], equals(255)); // Alpha of last pixel
+
+        // Render to ui.Image asynchronously
+        final image = await DicomRenderer.renderToImage(dataset);
+        expect(image.width, equals(256));
+        expect(image.height, equals(256));
+      },
+    );
   });
 }

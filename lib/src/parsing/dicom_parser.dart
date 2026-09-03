@@ -48,6 +48,9 @@ class DicomParser {
       isEncapsulated: false,
     );
 
+    // Whether the first non-Group-0002 element has been checked for Explicit VR encoding.
+    bool checkedDatasetVR = false;
+
     // Parse elements sequentially
     while (offset + 4 <= bytes.length) {
       // Read Tag (Group, Element)
@@ -67,6 +70,30 @@ class DicomParser {
       // DICOM PS3.5 Section 7.5: Group 0xFFFE items (Item, Item Delimitation, Sequence Delimitation)
       // NEVER have VR fields even in Explicit VR mode!
       final isDelimitationOrItem = group == 0xFFFE;
+
+      // Interoperability fallback for real-world malformed/mismatched datasets:
+      // When transitioning from File Meta Information (Group 0002) to the main dataset,
+      // if the declared transfer syntax specifies Explicit VR, inspect the first actual
+      // dataset element to verify that a valid 2-byte uppercase ASCII VR code (A-Z) is present.
+      // If not, fall back to Implicit VR while preserving the Transfer Syntax UID and endianness.
+      if (!isGroup0002 && !isDelimitationOrItem && !checkedDatasetVR) {
+        checkedDatasetVR = true;
+        if (datasetSyntax.isExplicitVR && offset + 6 <= bytes.length) {
+          final b0 = bytes[offset + 4];
+          final b1 = bytes[offset + 5];
+          final isValidAsciiVr =
+              (b0 >= 0x41 && b0 <= 0x5A) && (b1 >= 0x41 && b1 <= 0x5A);
+          if (!isValidAsciiVr) {
+            datasetSyntax = TransferSyntaxDetails(
+              uid: datasetSyntax.uid,
+              name: datasetSyntax.name,
+              isExplicitVR: false,
+              isLittleEndian: datasetSyntax.isLittleEndian,
+              isEncapsulated: datasetSyntax.isEncapsulated,
+            );
+          }
+        }
+      }
 
       final currentExplicitVR =
           isDelimitationOrItem

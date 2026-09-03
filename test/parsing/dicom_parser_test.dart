@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dicom_viewer/dicom_viewer.dart';
@@ -36,5 +37,38 @@ void main() {
       final shortBytes = Uint8List(50);
       expect(() => DicomDataset.fromBytes(shortBytes), throwsFormatException);
     });
+
+    test(
+      'Interoperability: parses malformed/mismatched dataset (SC_rgb_jpeg.dcm) with implicit VR fallback',
+      () {
+        final file = File('test/fixtures/jpeg/SC_rgb_jpeg.dcm');
+        expect(file.existsSync(), isTrue);
+
+        final dataset = DicomDataset.fromBytes(file.readAsBytesSync());
+
+        expect(dataset.transferSyntaxUid, equals(TransferSyntax.jpegBaseline));
+        expect(dataset.rows, equals(256));
+        expect(dataset.columns, equals(256));
+        expect(dataset.samplesPerPixel, equals(3));
+        expect(dataset.photometricInterpretation, equals('RGB'));
+
+        final pixelElem = dataset.getElement(DicomTag.pixelData);
+        expect(pixelElem, isNotNull);
+        expect(pixelElem!.encapsulatedData, isNotNull);
+        expect(pixelElem.encapsulatedData!.fragments, isNotEmpty);
+        expect(
+          pixelElem.encapsulatedData!.fragments.first.payload.length,
+          equals(3498),
+        );
+        expect(
+          pixelElem.encapsulatedData!.fragments.first.payload[0],
+          equals(0xFF),
+        );
+        expect(
+          pixelElem.encapsulatedData!.fragments.first.payload[1],
+          equals(0xD8),
+        );
+      },
+    );
   });
 }
