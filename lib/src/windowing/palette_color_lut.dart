@@ -94,7 +94,7 @@ class PaletteColorLut {
             greenDataElem == null ||
             blueDataElem == null)) {
       throw UnsupportedError(
-        'Segmented Palette Color Lookup Table Data (0028,1221-1223) is unsupported in v0.3.0. '
+        'Segmented Palette Color Lookup Table Data (0028,1221-1223) is unsupported. '
         'Only direct Palette Color LUT Data (0028,1201-1203) is supported.',
       );
     }
@@ -104,7 +104,7 @@ class PaletteColorLut {
             greenDataElem == null ||
             blueDataElem == null)) {
       throw UnsupportedError(
-        'Enhanced Palette Color Lookup Table Sequence (0028,140B) is unsupported in v0.3.0. '
+        'Enhanced Palette Color Lookup Table Sequence (0028,140B) is unsupported. '
         'Only direct Palette Color LUT Data (0028,1201-1203) is supported.',
       );
     }

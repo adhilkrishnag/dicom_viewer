@@ -43,13 +43,13 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
   double? _activeWc;
   double? _activeWw;
 
-  // v0.2.0 Interactive Viewer State
+  // Interactive Viewer State
   bool _enableZoom = true;
   DicomTool _selectedTool = DicomTool.pan;
   double _currentScale = 1.0;
   Offset _currentOffset = Offset.zero;
 
-  // v0.3.0 Multi-Frame Navigation & Cine Playback State
+  // Multi-Frame Navigation & Cine Playback State
   int _currentFrame = 0;
   Timer? _playTimer;
   bool get _isPlaying => _playTimer != null && _playTimer!.isActive;
@@ -275,7 +275,7 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    // Mode Toggle: Interactive Pan & Zoom (v0.2.0) vs Legacy Windowing (v0.1.0)
+                    // Mode Toggle: Interactive Pan & Zoom vs Legacy Windowing
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
@@ -578,6 +578,8 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                                       ? 'Interactive Windowing Tool:'
                                       : _selectedTool == DicomTool.rectangleRoi
                                       ? 'Interactive Rectangle ROI Tool:'
+                                      : _selectedTool == DicomTool.probe
+                                      ? 'Interactive Pixel Probe Tool:'
                                       : 'Interactive Measurement Tool:',
                                   style: TextStyle(
                                     fontSize: 11,
@@ -585,7 +587,9 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                                     color:
                                         (_selectedTool == DicomTool.measure ||
                                                 _selectedTool ==
-                                                    DicomTool.rectangleRoi)
+                                                    DicomTool.rectangleRoi ||
+                                                _selectedTool ==
+                                                    DicomTool.probe)
                                             ? Colors.yellowAccent
                                             : Colors.cyanAccent,
                                   ),
@@ -612,6 +616,14 @@ class _DicomViewerScreenState extends State<DicomViewerScreen> {
                                       DicomTool.rectangleRoi)
                                     const Text(
                                       '📐 Drag: Draw Rectangle ROI',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.yellowAccent,
+                                      ),
+                                    )
+                                  else if (_selectedTool == DicomTool.probe)
+                                    const Text(
+                                      '🎯 Hover: Inspect Pixel Coordinate & Intensity',
                                       style: TextStyle(
                                         fontSize: 10,
                                         color: Colors.yellowAccent,

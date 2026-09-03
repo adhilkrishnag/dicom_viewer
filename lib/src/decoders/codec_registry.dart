@@ -50,7 +50,8 @@ class CodecRegistry {
 
   /// Authoritative extraction and decompression of raw pixel bytes for [frameIndex].
   ///
-  /// For compressed datasets (e.g. RLE), uses the registered [DicomFrameCodec].
+  /// For compressed datasets (e.g. RLE, JPEG Baseline, JPEG Lossless SV1),
+  /// uses the registered [DicomFrameCodec].
   /// For uncompressed datasets, extracts the native frame slice.
   static Uint8List extractEffectivePixelBytes(
     DicomDataset dataset, {

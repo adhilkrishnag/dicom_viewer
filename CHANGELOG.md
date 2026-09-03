@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.5.0
+
+- **Pure-Dart JPEG Baseline Decompressor (`1.2.840.10008.1.2.4.50`)**:
+  - Pure-Dart ISO/IEC 10918-1 / ITU-T T.81 8-bit baseline sequential DCT decompressor without FFI or external libraries.
+  - Decodes grayscale (`MONOCHROME1`, `MONOCHROME2`), `RGB`, and subsampled `YBR_FULL_422` clinical color images.
+  - Baseline Huffman table decoding (`DHT`), quantization table processing (`DQT`), fast integer IDCT, and restart marker tracking (`RST0`–`RST7` and `DRI`).
+  - Bit-exact and reference oracle validation against DCMTK and pydicom/Pillow reference decoders.
+- **Pure-Dart JPEG Lossless SV1 Decompressor (`1.2.840.10008.1.2.4.70`)**:
+  - Pure-Dart ISO/IEC 10918-1 / ITU-T T.81 first-order prediction (Process 14, Selection Value 1) lossless decompressor.
+  - Native support for 8-bit, 12-bit, and 16-bit sample precision.
+  - Validated on official clinical CT/MR datasets (`JPEG-LL.dcm`, `JPGLosslessP14SV1_1s_1f_8b.dcm`) with bit-exact parity against reference decoders.
+- **Internal Modular Codec Registry & Framing Architecture**:
+  - Introduced `CodecRegistry` and `DicomFrameCodec` architecture decoupling pixel data decompression from the UI and rendering pipelines.
+  - Pluggable framing strategies (`JpegFramingStrategy`, `RleFramingStrategy`) for encapsulated fragment parsing.
+  - Unified `extractEffectivePixelBytes` authoritative pathway supporting both uncompressed native frame slices and compressed payloads.
+- **Color Pipeline Support & ITU-R BT.601 Conversion**:
+  - Full support for `YBR_FULL_422` subsampled JPEG Baseline frames.
+  - Authoritative ITU-R BT.601 color space transformation (`Y`, `Cb`, `Cr` to `R`, `G`, `B`).
+  - Validated against multi-frame clinical ultrasound color fixtures (`examples_ybr_color.dcm`).
+- **Multi-Frame JPEG Navigation & Frame Isolation**:
+  - Frame slice extraction and dynamic navigation for encapsulated JPEG datasets (`numberOfFrames`, `frameIndex`).
+  - Full Basic Offset Table (BOT) parsing, 1:1 fragment-to-frame empty-BOT fallback, and sequential JPEG marker scanning (`0xFFD8` SOI to `0xFFD9` EOI) across multi-fragment single-frame and multi-frame datasets.
+  - Frame isolation preserved during interactive scrub slider and Cine playback.
+- **Quantitative ROI Statistics & Pixel Probe Validation on JPEG Datasets**:
+  - Verified ROI measurement engine and Pixel Probe across both JPEG Lossless and JPEG Baseline datasets.
+  - Accurate Hounsfield Unit ($HU$) statistics on JPEG Lossless CT datasets with valid rescale slope and intercept.
+  - Stored scalar and RGB color inspection on JPEG frames via Pixel Probe without full-image re-decoding.
+- **Parser Interoperability & Error Modernization**:
+  - Dynamic dataset VR auto-detection fallback for non-conformant DICOM datasets declaring Explicit VR in file meta while dataset body elements are encoded in Implicit VR. Properly encoded Explicit VR datasets retain Explicit VR parsing because the first dataset element exposes a valid two-byte uppercase VR code.
+  - Modernized, version-neutral `UnsupportedError` messaging for unsupported or deferred transfer syntaxes.
+- **Public API Documentation & Release Readiness**:
+  - All public-member documentation lint checks pass with `public_member_api_docs: true` enabled.
+  - Added comprehensive Authoritative Transfer Syntax Support Matrix distinguishing supported, unsupported, and deferred transfer syntaxes with exact UIDs.
+  - Modernized error messages across palette color LUTs and codec registries to be completely version-neutral.
+- **Authoritative Scope & Limitations**:
+  - Supported compressed transfer syntaxes: RLE Lossless (`1.2.840.10008.1.2.5`), JPEG Baseline (`1.2.840.10008.1.2.4.50`), and JPEG Lossless SV1 (`1.2.840.10008.1.2.4.70`).
+  - Supported uncompressed transfer syntaxes: Implicit VR Little Endian (`1.2.840.10008.1.2`), Explicit VR Little Endian (`1.2.840.10008.1.2.1`), Explicit VR Big Endian (`1.2.840.10008.1.2.2`).
+  - Unsupported or deferred transfer syntaxes throw explicit `UnsupportedError`: JPEG Extended 12-bit (`1.2.840.10008.1.2.4.51`), JPEG Lossless Process 14 (`1.2.840.10008.1.2.4.57`), JPEG-LS (`1.2.840.10008.1.2.4.80`, `1.2.840.10008.1.2.4.81`), and JPEG 2000 (`1.2.840.10008.1.2.4.90`, `1.2.840.10008.1.2.4.91`).
+
 ## 0.4.0
 
 - **2D Distance Measurement Caliper Tool (`DicomTool.measure`)**:
@@ -30,8 +69,8 @@
   - Strict per-frame isolation across Distance Measurements, ROIs, Statistics, and Probe buffers.
   - Frame navigation and tool switching preserve per-frame state without cross-frame leakage.
   - Dataset changes cleanly invalidate and reset all measurement and probe caches.
-- **100% Public API DartDoc Coverage**:
-  - Complete DartDoc documentation with standard citations and mathematical formulas across all public symbols.
+- **Public API DartDoc Documentation**:
+  - All public-member documentation lint checks pass with `public_member_api_docs: true` enabled, providing comprehensive documentation with standard citations and mathematical formulas across all public symbols.
 - **Important Semantics & Limitations**:
   - Physical measurements ($mm, mm^2$) strictly require verified, finite, positive `Pixel Spacing (0028,0030)`.
   - `Pixel Aspect Ratio (0028,0034)` provides display aspect ratio correction only and never establishes physical scale.

@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform Support](https://img.shields.io/badge/platform-Android%20%7C%20iOS%20%7C%20macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Web-blue)](https://pub.dev/packages/dicom_viewer)
 
-A **pure-Dart, cross-platform DICOM viewer package for Flutter**. Parses uncompressed and RLE Lossless DICOM medical images, applies Hounsfield Unit rescaling, linear VOI windowing (contrast/brightness), and PALETTE COLOR lookup tables, and provides interactive 2D distance measurements, rectangular ROI statistics, and pixel probe inspection — **on Android, iOS, macOS, Windows, Linux, and Web from a single codebase with no native/FFI dependencies**.
+A **pure-Dart, cross-platform DICOM viewer package for Flutter**. Parses uncompressed, RLE Lossless, and JPEG compressed (Baseline & Lossless SV1) DICOM medical images, applies Hounsfield Unit rescaling, linear VOI windowing (contrast/brightness), and PALETTE COLOR lookup tables, and provides interactive 2D distance measurements, rectangular ROI statistics, and pixel probe inspection — **on Android, iOS, macOS, Windows, Linux, and Web from a single codebase with no native/FFI dependencies**.
 
 ---
 
@@ -20,9 +20,22 @@ Developers are responsible for determining the suitability, validation, regulato
 
 - ⚡ **100% Pure Dart**: Zero C/C++ or FFI native code dependencies. Completely self-contained.
 - 🌐 **True Cross-Platform**: Runs natively on Mobile (Android, iOS), Desktop (Windows, macOS, Linux), and Web (CanvasKit & Skwasm).
-- 🩺 **DICOM PS3.10 & PS3.5 Parsing**: Parses `Explicit VR Little Endian`, `Implicit VR Little Endian`, and `Big Endian` file streams.
-- 📦 **Encapsulated Pixel Data & RLE Lossless**: Full RLE Lossless (`1.2.840.10008.1.2.5`) decompressor for 8-bit, 16-bit MSB/LSB, and 24-bit RGB segments, verified with real-world DICOM fixtures.
-- 🎬 **Multi-Frame Navigation & Cine Playback**: Frame slice extraction and dynamic navigation for multi-frame datasets (`numberOfFrames`, `frameIndex`).
+- 🩺 **DICOM PS3.10 & PS3.5 Parsing**: Parses `Explicit VR Little Endian`, `Implicit VR Little Endian`, and `Big Endian` file streams. Includes dynamic parser fallback for malformed datasets declaring Explicit VR in File Meta whose dataset body elements are encoded in Implicit VR, while properly encoded Explicit VR datasets retain standard Explicit VR parsing.
+- 🖼️ **Pure-Dart JPEG Baseline Decompressor (`1.2.840.10008.1.2.4.50`)**:
+  - Full 8-bit lossy DCT decompressor complying with ISO/IEC 10918-1 / ITU-T T.81.
+  - Native support for grayscale (`MONOCHROME1`, `MONOCHROME2`), `RGB`, and subsampled `YBR_FULL_422` with accurate ITU-R BT.601 color conversion.
+  - Supports restart markers (`RST0`–`RST7`) and DRI markers.
+- 🔒 **Pure-Dart JPEG Lossless SV1 Decompressor (`1.2.840.10008.1.2.4.70`)**:
+  - Full first-order prediction (Process 14, Selection Value 1) decompressor for medical imaging.
+  - Supports 8-bit, 12-bit, and 16-bit sample precision with bit-exact reference oracle validation.
+- 📦 **Encapsulated Pixel Data & RLE Lossless (`1.2.840.10008.1.2.5`)**:
+  - Full RLE Lossless decompressor for 8-bit, 16-bit MSB/LSB, and 24-bit RGB segments, verified with real-world clinical fixtures.
+- 🧩 **Modular Internal Codec Registry Architecture**:
+  - Pluggable `CodecRegistry` and `DicomFrameCodec` subsystem isolating transfer syntax decoding from rendering pipelines.
+  - Frame-accurate payload extraction via dedicated framing strategies (`JpegFramingStrategy`, `RleFramingStrategy`).
+- 🎬 **Multi-Frame Navigation & Cine Playback**:
+  - Frame slice extraction and dynamic navigation for multi-frame uncompressed, RLE, and JPEG datasets (`numberOfFrames`, `frameIndex`).
+  - Supports Basic Offset Tables (BOT), empty BOT fallback with 1:1 fragment-to-frame mapping, and multi-fragment-per-frame scanning.
 - 📐 **Physical Pixel Spacing & Geometry**:
   - Automatic geometric aspect-ratio correction preserving physical pixel geometry from `Pixel Spacing (0028,0030)`.
   - Canonical image geometry with strict fallback hierarchy (Verified Physical Spacing $\to$ Display-Only Pixel Aspect Ratio $\to$ Native Matrix Fallback).
@@ -33,11 +46,11 @@ Developers are responsible for determining the suitability, validation, regulato
   - Interactive rectangular ROI creation with corner normalization.
   - Reports physical dimensions ($W \times H$ in $mm$, Area in $mm^2$) or pixel fallback ($px, px^2$).
   - Evaluates enclosed discrete pixels: Mean, Population Standard Deviation ($\sigma_N$), Min, Max, Median, and Pixel Count.
-  - Verified Hounsfield Unit ($HU$) statistics on CT datasets with explicit valid rescale metadata.
+  - Verified Hounsfield Unit ($HU$) statistics on CT datasets (including JPEG Lossless CT) with explicit valid rescale metadata.
   - Unitless intensity statistics on non-CT modalities (MR, CR, DX, US) with pre-rescale Pixel Padding exclusion.
 - 🔍 **Pixel Probe Tool (`DicomTool.probe`)**:
   - Real-time hover inspection overlay showing discrete coordinates $(c, r)$, stored scalar intensity, and modality/HU rescaled values.
-  - RGB triplet and palette index inspection for PALETTE COLOR and RGB datasets.
+  - RGB triplet and palette index inspection for PALETTE COLOR, RGB, and YBR datasets.
   - High-performance current-frame caching without full-image re-decoding or render pipeline overhead.
 - 🎨 **PALETTE COLOR LUT Rendering**: Direct Palette Color Lookup Table mapping (Red, Green, Blue) supporting 8-bit and 16-bit entries with signed/unsigned descriptor handling.
 - 🎛️ **VOI Windowing & Rescale Math**:
@@ -47,31 +60,35 @@ Developers are responsible for determining the suitability, validation, regulato
   - *Note: Windowing is not applicable to `PALETTE COLOR`, `RGB`, or `YBR_FULL` color rendering.*
 - 📋 **Comprehensive Metadata API**: 25+ strongly-typed convenience getters for Patient, Study, Series, Equipment, Instance, and Acquisition attributes.
 - 🖐️ **Interactive UI Widget**: `DicomImageWidget` with touch/pan drag gestures for windowing, pan/zoom, distance measurement, rectangle ROI, and pixel probe inspection.
-- 🛡️ **Graceful Error Handling**: Clear, descriptive `UnsupportedError` notifications for compressed transfer syntaxes (e.g. JPEG 2000, JPEG Lossless).
+- 🛡️ **Graceful Error Handling**: Clear, version-neutral `UnsupportedError` notifications for unsupported or deferred transfer syntaxes.
 
-### 📋 Supported in v0.4.0
+---
 
-- ✅ **Explicit VR Little Endian** (`1.2.840.10008.1.2.1`)
-- ✅ **Implicit VR Little Endian** (`1.2.840.10008.1.2`)
-- ✅ **Explicit VR Big Endian** (`1.2.840.10008.1.2.2`)
-- ✅ **Uncompressed Pixel Data** (8-bit, 16-bit signed/unsigned, 32-bit RGBA)
-- ✅ **RLE Lossless** (`1.2.840.10008.1.2.5`) — Fully verified against real-world single-frame and multi-frame DICOM fixtures.
-- ✅ **Photometric Interpretations**: `MONOCHROME1`, `MONOCHROME2`, `RGB` (Planar Configuration 0 & 1), `YBR_FULL`, `PALETTE COLOR` (direct 8-bit & 16-bit LUTs).
-- ✅ **Physical Pixel Spacing Display Correction** (`0028,0030`)
-- ✅ **Multi-Frame Navigation & Cine Playback** (`numberOfFrames`, `frameIndex`)
-- ✅ **Interactive Tools**: Pan & Zoom (`DicomTool.pan`), Windowing (`DicomTool.windowing`), Distance Measurement (`DicomTool.measure`), Rectangle ROI (`DicomTool.rectangleRoi`), Pixel Probe (`DicomTool.probe`).
-- ✅ **Quantitative ROI Statistics & CT Hounsfield Units ($HU$)**
-- ✅ **Pixel Padding Value Filtering & Exclusion** (`0028,0120` & `0028,0121`)
-- ✅ **Multi-Valued Clinical Window Presets** (`windowCenterPresets`, `windowWidthPresets`)
-- ✅ **Frame-Aware State Isolation across all tools**
+## 📊 Authoritative Transfer Syntax Support Matrix
 
-### ⛔ Unsupported / Planned for Future Releases
+The following table defines the official transfer syntax capabilities in `dicom_viewer v0.5.0`:
 
-- ❌ JPEG Compressed Transfer Syntaxes (JPEG Baseline, JPEG Lossless, JPEG 2000) — throws clear `UnsupportedError`
-- ❌ Segmented Palette Color LUT Data (`0028,1221-1223`) and Enhanced Palette Color Sequence (`0028,140B`) — throws clear `UnsupportedError`
-- ❌ 3D spatial geometry (Image Position / Image Orientation Patient slice reconstruction)
-- ❌ Multi-Planar Reconstruction (MPR) & 3D volume rendering
-- ❌ DICOM Structured Reporting (SR) & Grayscale Softcopy Presentation State (GSPS)
+| Transfer Syntax UID | Transfer Syntax Name | Compression / Encoding | Status in v0.5.0 |
+| :--- | :--- | :--- | :--- |
+| **`1.2.840.10008.1.2`** | Implicit VR Little Endian | Default Uncompressed Little Endian | ✅ **Supported** |
+| **`1.2.840.10008.1.2.1`** | Explicit VR Little Endian | Uncompressed Little Endian | ✅ **Supported** |
+| **`1.2.840.10008.1.2.2`** | Explicit VR Big Endian | Uncompressed Big Endian (Retired) | ✅ **Supported** |
+| **`1.2.840.10008.1.2.5`** | RLE Lossless | Run Length Encoding (PS3.5 Annex G) | ✅ **Supported** |
+| **`1.2.840.10008.1.2.4.50`** | JPEG Baseline (Process 1) | 8-bit Lossy DCT JPEG | ✅ **Supported** |
+| **`1.2.840.10008.1.2.4.70`** | JPEG Lossless, Non-Hierarchical, First-Order Prediction (Process 14 SV1) | 8-bit / 12-bit / 16-bit Lossless Huffman JPEG | ✅ **Supported** |
+| `1.2.840.10008.1.2.4.51` | JPEG Extended (Process 2 & 4) | 12-bit Lossy DCT JPEG | ❌ **Unsupported** (`UnsupportedError`) |
+| `1.2.840.10008.1.2.4.57` | JPEG Lossless (Process 14) | General Selection Value Lossless JPEG | ⏳ **Deferred** (`UnsupportedError`) |
+| `1.2.840.10008.1.2.4.80` | JPEG-LS Lossless Image Compression | Context-based Lossless | ❌ **Unsupported** (`UnsupportedError`) |
+| `1.2.840.10008.1.2.4.81` | JPEG-LS Lossy (Near-Lossless) Image Compression | Context-based Near-Lossless | ❌ **Unsupported** (`UnsupportedError`) |
+| `1.2.840.10008.1.2.4.90` | JPEG 2000 Image Compression (Lossless Only) | Wavelet Lossless | ❌ **Unsupported** (`UnsupportedError`) |
+| `1.2.840.10008.1.2.4.91` | JPEG 2000 Image Compression | Wavelet Lossy | ❌ **Unsupported** (`UnsupportedError`) |
+
+### ⛔ Other Scope Boundaries & Limitations
+
+- ❌ Segmented Palette Color LUT Data (`0028,1221-1223`) and Enhanced Palette Color Sequence (`0028,140B`) — throws clear `UnsupportedError` (only direct Palette Color LUT Data `0028,1201-1203` is supported).
+- ❌ 3D spatial geometry (Image Position / Image Orientation Patient slice reconstruction).
+- ❌ Multi-Planar Reconstruction (MPR) & 3D volume rendering.
+- ❌ DICOM Structured Reporting (SR) & Grayscale Softcopy Presentation State (GSPS).
 
 ---
 
@@ -219,8 +236,8 @@ print('Window Width Presets: ${dataset.windowWidthPresets}');
 - [x] **v0.1.0** — Uncompressed single-frame DICOM parsing, linear VOI windowing math, `ui.Image` renderer, interactive `DicomImageWidget`, cross-platform support.
 - [x] **v0.2.0** — Pure-Dart RLE Lossless decompressor groundwork, Pixel Padding Value filtering, multi-valued clinical window presets, multi-frame groundwork (`frameIndex`), interactive pan/zoom & double-tap reset.
 - [x] **v0.3.0** — Real-world DICOM RLE fixture validation, multi-frame navigation & Cine playback, PALETTE COLOR direct LUT rendering, physical Pixel Spacing display aspect-ratio correction, rich Metadata API, medical disclaimer.
-- [x] **v0.4.0** — Measurement & inspection tools (2D Distance in mm, Rectangle ROI, Hounsfield Unit ROI statistics, Pixel Probe, frame-aware state isolation).
-- [ ] **v0.5.0** — JPEG Lossless & JPEG Baseline decompressors.
+- [x] **v0.5.0** — Pure-Dart JPEG Baseline (`.50`) & JPEG Lossless SV1 (`.70`) decompressors, modular codec registry architecture, multi-frame JPEG framing and navigation, ITU-R BT.601 YBR-to-RGB color pipeline, verified quantitative ROI statistics and Pixel Probe across JPEG datasets.
+- [ ] **v0.6.0** — Advanced clinical modalities & future extensions.
 
 ---
 

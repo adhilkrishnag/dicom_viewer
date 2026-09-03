@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 /// Pure-Dart RLE Lossless Decompressor complying with DICOM PS3.5 Annex G.
 ///
-/// Supported Scope in v0.2.0:
+/// Supported Scope:
 /// - Bit Depths: 8-bit, 16-bit (signed/unsigned 2's complement).
 /// - Samples per Pixel: 1 (Grayscale MONOCHROME1/2), 3 (24-bit RGB).
 /// - Planar Configuration: 0 (Color-by-pixel).
