@@ -71,7 +71,7 @@ class DicomProbeResult {
       }
     }
 
-    // YBR 3-sample handling (YBR_FULL, YBR_FULL_422, YBR_PARTIAL_422)
+    // YBR 3-sample handling (YBR_FULL, YBR_FULL_422)
     // Stored samples are [Y, Cb, Cr]; converts to display [R, G, B] per DICOM PS3.3 C.7.6.3.1.2
     if (dataset.samplesPerPixel == 3 &&
         photo == PhotometricInterpretation.ybrFull) {
@@ -85,6 +85,32 @@ class DicomProbeResult {
         final int r = (y + 1.402 * cr).round().clamp(0, 255);
         final int g = (y - 0.344136 * cb - 0.714136 * cr).round().clamp(0, 255);
         final int b = (y + 1.772 * cb).round().clamp(0, 255);
+
+        return DicomProbeResult(
+          pixelColumn: pixelColumn,
+          pixelRow: pixelRow,
+          isInside: true,
+          rgb: [r, g, b],
+        );
+      }
+    }
+
+    // YBR_PARTIAL_422: CCIR 601-2 (BT.601) limited-range probe.
+    // Stored samples are [Y, Cb, Cr] (interleaved, post-decode).
+    if (dataset.samplesPerPixel == 3 &&
+        photo == PhotometricInterpretation.ybrPartial422) {
+      final p = pixelRow * columns + pixelColumn;
+      final yIdx = p * 3;
+      if (yIdx + 2 < rawPixels.length) {
+        final double yShifted = rawPixels[yIdx].toDouble() - 16.0;
+        final double cb = rawPixels[yIdx + 1].toDouble() - 128.0;
+        final double cr = rawPixels[yIdx + 2].toDouble() - 128.0;
+
+        final int r = (1.1644 * yShifted + 1.5960 * cr).round().clamp(0, 255);
+        final int g = (1.1644 * yShifted - 0.3918 * cb - 0.8130 * cr)
+            .round()
+            .clamp(0, 255);
+        final int b = (1.1644 * yShifted + 2.0172 * cb).round().clamp(0, 255);
 
         return DicomProbeResult(
           pixelColumn: pixelColumn,

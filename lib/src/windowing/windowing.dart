@@ -190,7 +190,8 @@ class Windowing {
         rgbaBytes[dstOffset + 3] = 255;
       }
     } else if (photo == PhotometricInterpretation.ybrFull) {
-      // YBR to RGB conversion
+      // YBR_FULL / YBR_FULL_422: full-range conversion
+      // Y in [0,255], Cb/Cr neutral at 128.
       final isPlanarSeparate = info.planarConfiguration == 1;
       for (int i = 0; i < pixelCount; i++) {
         final dstOffset = i * 4;
@@ -221,6 +222,50 @@ class Windowing {
         final int r = (y + 1.402 * cr).round().clamp(0, 255);
         final int g = (y - 0.344136 * cb - 0.714136 * cr).round().clamp(0, 255);
         final int b = (y + 1.772 * cb).round().clamp(0, 255);
+
+        rgbaBytes[dstOffset] = r;
+        rgbaBytes[dstOffset + 1] = g;
+        rgbaBytes[dstOffset + 2] = b;
+        rgbaBytes[dstOffset + 3] = 255;
+      }
+    } else if (photo == PhotometricInterpretation.ybrPartial422) {
+      // YBR_PARTIAL_422: CCIR 601-2 (BT.601) limited-range conversion (retired DICOM PI).
+      // Y in [16, 235], Cb/Cr in [16, 240], neutral at 128.
+      // After JPEG decoding the codec always upsamples to 3 interleaved samples per pixel.
+      // Reference: DICOM PS3.3 C.7.6.3.1.2, ITU-R BT.601.
+      final isPlanarSeparate = info.planarConfiguration == 1;
+      for (int i = 0; i < pixelCount; i++) {
+        final dstOffset = i * 4;
+        int yVal, cbVal, crVal;
+        if (isPlanarSeparate) {
+          yVal = i < rawPixels.length ? rawPixels[i] : 0;
+          cbVal =
+              (pixelCount + i) < rawPixels.length
+                  ? rawPixels[pixelCount + i]
+                  : 0;
+          crVal =
+              (2 * pixelCount + i) < rawPixels.length
+                  ? rawPixels[2 * pixelCount + i]
+                  : 0;
+        } else {
+          final srcOffset = i * 3;
+          yVal = srcOffset < rawPixels.length ? rawPixels[srcOffset] : 0;
+          cbVal =
+              (srcOffset + 1) < rawPixels.length ? rawPixels[srcOffset + 1] : 0;
+          crVal =
+              (srcOffset + 2) < rawPixels.length ? rawPixels[srcOffset + 2] : 0;
+        }
+
+        // BT.601 limited-range inverse transform
+        final double yShifted = yVal.toDouble() - 16.0;
+        final double cb = cbVal.toDouble() - 128.0;
+        final double cr = crVal.toDouble() - 128.0;
+
+        final int r = (1.1644 * yShifted + 1.5960 * cr).round().clamp(0, 255);
+        final int g = (1.1644 * yShifted - 0.3918 * cb - 0.8130 * cr)
+            .round()
+            .clamp(0, 255);
+        final int b = (1.1644 * yShifted + 2.0172 * cb).round().clamp(0, 255);
 
         rgbaBytes[dstOffset] = r;
         rgbaBytes[dstOffset + 1] = g;

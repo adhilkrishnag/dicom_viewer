@@ -5,7 +5,7 @@ import 'dart:typed_data';
 /// Supported Scope:
 /// - Bit Depths: 8-bit, 16-bit (signed/unsigned 2's complement).
 /// - Samples per Pixel: 1 (Grayscale MONOCHROME1/2), 3 (24-bit RGB).
-/// - Planar Configuration: 0 (Color-by-pixel).
+/// - Planar Configuration: 0 (Color-by-pixel interleaved) and 1 (Separate color planes).
 ///
 /// Uncompressed output bytes are returned ready for [PixelDataDecoder] parsing.
 class RleDecoder {
@@ -23,6 +23,7 @@ class RleDecoder {
     required int height,
     required int bitsAllocated,
     required int samplesPerPixel,
+    int planarConfiguration = 0,
   }) {
     if (rleFrameBytes.length < 64) {
       throw FormatException(
@@ -92,16 +93,28 @@ class RleDecoder {
         );
       }
     } else if (samplesPerPixel == 3) {
-      // 24-bit RGB (3 segments: Red, Green, Blue)
+      // 8-bit 3-channel (e.g. RGB or YBR): 3 segments, one per channel.
+      // DICOM PS3.5 Annex G.3: segments are always channel-ordered (R/G/B).
+      // Output layout depends on PlanarConfiguration (DICOM 0028,0006):
+      //   0 = color-by-pixel interleaved: [R0,G0,B0, R1,G1,B1, ...]
+      //   1 = color-by-plane separate:   [R0,R1,...,G0,G1,...,B0,B1,...]
       if (bytesPerSample == 1 && numSegments >= 3) {
         final redSeg = decompressedSegments[0];
         final greenSeg = decompressedSegments[1];
         final blueSeg = decompressedSegments[2];
-        for (int p = 0; p < totalPixels; p++) {
-          final outIdx = p * 3;
-          result[outIdx] = redSeg[p];
-          result[outIdx + 1] = greenSeg[p];
-          result[outIdx + 2] = blueSeg[p];
+        if (planarConfiguration == 1) {
+          // Planar output: R plane, then G plane, then B plane
+          result.setAll(0, redSeg);
+          result.setAll(totalPixels, greenSeg);
+          result.setAll(2 * totalPixels, blueSeg);
+        } else {
+          // Interleaved output (default, PlanarConfiguration == 0)
+          for (int p = 0; p < totalPixels; p++) {
+            final outIdx = p * 3;
+            result[outIdx] = redSeg[p];
+            result[outIdx + 1] = greenSeg[p];
+            result[outIdx + 2] = blueSeg[p];
+          }
         }
       } else {
         throw UnsupportedError(

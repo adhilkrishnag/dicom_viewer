@@ -88,6 +88,14 @@ class TransferSyntaxDetails {
           isLittleEndian: false,
           isEncapsulated: false,
         );
+      case TransferSyntax.deflatedExplicitVRLittleEndian:
+        return TransferSyntaxDetails(
+          uid: cleanUid,
+          name: 'Deflated Explicit VR Little Endian',
+          isExplicitVR: true,
+          isLittleEndian: true,
+          isEncapsulated: false,
+        );
       case TransferSyntax.jpegBaseline:
         return TransferSyntaxDetails(
           uid: cleanUid,

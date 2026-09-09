@@ -78,6 +78,20 @@ class DicomParser {
       // If not, fall back to Implicit VR while preserving the Transfer Syntax UID and endianness.
       if (!isGroup0002 && !isDelimitationOrItem && !checkedDatasetVR) {
         checkedDatasetVR = true;
+
+        // Reject Deflated Explicit VR Little Endian before attempting to parse
+        // compressed bytes. Full cross-platform decompression requires dart:io
+        // (unavailable on Flutter Web) or an external package, neither of which
+        // is acceptable under the current architecture and dependency policy.
+        if (datasetSyntax.uid ==
+            TransferSyntax.deflatedExplicitVRLittleEndian) {
+          throw UnsupportedError(
+            'Deflated Explicit VR Little Endian (1.2.840.10008.1.2.1.99) is not supported. '
+            'Cross-platform zlib decompression requires dart:io (unavailable on Flutter Web) '
+            'or an external dependency, which conflicts with the current architecture policy.',
+          );
+        }
+
         if (datasetSyntax.isExplicitVR && offset + 6 <= bytes.length) {
           final b0 = bytes[offset + 4];
           final b1 = bytes[offset + 5];

@@ -35,6 +35,7 @@ class RleFrameCodec implements DicomFrameCodec {
       height: info.rows,
       bitsAllocated: info.bitsAllocated,
       samplesPerPixel: info.samplesPerPixel,
+      planarConfiguration: info.planarConfiguration,
     );
   }
 }
