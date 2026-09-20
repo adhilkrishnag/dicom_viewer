@@ -812,7 +812,10 @@ void main() {
       expect(roiPainter.measurement!.isValid, isTrue);
     });
 
-    testWidgets('40. MONOCHROME1 ROI (MR fixture)', (tester) async {
+    testWidgets('40. MONOCHROME2 ROI (MR fixture - verified MONOCHROME2)', (
+      tester,
+    ) async {
+      expect(mrDataset.photometricInterpretation, 'MONOCHROME2');
       await tester.pumpWidget(
         createViewer(dataset: mrDataset, tool: DicomTool.rectangleRoi),
       );

@@ -20,6 +20,7 @@ void main() {
       expect(dataset.pixelRepresentation, 1); // Signed (2's complement)
       expect(dataset.rescaleIntercept, -1024.0);
       expect(dataset.rescaleSlope, 1.0);
+      expect(dataset.photometricInterpretation, 'MONOCHROME2');
       expect(dataset.pixelDataBytes, isNotNull);
       expect(dataset.pixelDataBytes!.length, 128 * 128 * 2);
     });
@@ -34,6 +35,7 @@ void main() {
       expect(dataset.rows, 64);
       expect(dataset.columns, 64);
       expect(dataset.bitsAllocated, 16);
+      expect(dataset.photometricInterpretation, 'MONOCHROME2');
       expect(dataset.pixelDataBytes, isNotNull);
       expect(dataset.pixelDataBytes!.length, 64 * 64 * 2);
     });

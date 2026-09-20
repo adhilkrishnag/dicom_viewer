@@ -685,8 +685,12 @@ void main() {
     );
 
     test('23. emri_small_RLE.dcm real RLE grayscale statistics extraction', () {
-      final file = File('test/fixtures/emri_small_RLE.dcm');
-      if (!file.existsSync()) return;
+      final file = File('test/fixtures/rle/emri_small_RLE.dcm');
+      expect(
+        file.existsSync(),
+        isTrue,
+        reason: 'emri_small_RLE.dcm fixture missing',
+      );
 
       final dataset = DicomDataset.fromBytes(file.readAsBytesSync());
 
