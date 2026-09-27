@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.6.0 (Unreleased)
+
+- **Real Uncompressed Multi-Frame Validation**:
+  - Added and permanently validated real 10-frame uncompressed Explicit VR Little Endian MR clinical fixture (`emri_small.dcm`).
+  - Validated native frame slice extraction, deterministic extraction, pairwise adjacent frame differences, 10-frame RGBA and Flutter `ui.Image` rendering, quantitative ROI statistics, and Pixel Probe across multiple frames.
+  - Established cross-Transfer-Syntax pixel and rendered RGBA bit-for-bit equivalence against RLE Lossless fixture (`emri_small_RLE.dcm`).
+- **Real RLE Multi-Frame Validation**:
+  - Validated all 10 frames of real RLE Lossless MR fixture (`emri_small_RLE.dcm`) and 2 frames of real Ultrasound fixture (`OBXXXX1A_rle_2frame.dcm`).
+  - Verified frame-aware payload extraction, deterministic segment decompression, and multi-frame tool isolation.
+- **Real PlanarConfiguration=1 (Color By Plane) Validation**:
+  - Added and permanently validated real uncompressed Ultrasound fixture (`color-pl.dcm`).
+  - Validated raw planar sample extraction, 3-plane sample contiguous separation (Red, Green, Blue), RGBA color conversion, `ui.Image` rasterization, and `DicomImageWidget` tree integration.
+  - *Scope boundary*: PlanarConfiguration=1 rendering is validated for single-frame 8-bit uncompressed RGB Ultrasound; ROI and Pixel Probe remain unvalidated for planar-separated RGB data.
+- **Real MONOCHROME1 Polarity Inversion Validation**:
+  - Added and permanently validated real Computed Radiography fixture (`CR1_6154.dcm`).
+  - Validated 16-bit allocated / 12-bit stored unsigned pixel extraction, polarity inversion (`255 - intensity`), linear windowing, full RGBA rendering, quantitative ROI statistics, and Pixel Probe.
+  - *Scope boundary*: Validated for single-frame CR uncompressed; compressed MONOCHROME1 and other modalities/bit depths remain unverified.
+- **P0 DICOM Compatibility Hardening & Error Handling**:
+  - Added explicit rejection guard for Deflated Explicit VR Little Endian (`1.2.840.10008.1.2.1.99`) throwing descriptive `UnsupportedError`.
+  - Hardened encapsulated pixel data extraction against empty fragment sequences.
+- **Authoritative Compatibility Matrix & Documentation Consolidation**:
+  - Reconciled Transfer Syntax Support Matrix: qualified Explicit VR Big Endian (`1.2.840.10008.1.2.2`) as retired and unverified against clinical fixtures (synthetic stream test only); qualified JPEG Lossless SV1 (`1.2.840.10008.1.2.4.70`) as real-fixture validated for single-frame only (no suitable multi-frame fixture identified in investigated sources).
+  - Documented `YBR_PARTIAL_422` as synthetic-only (no suitable fixture with sufficiently clear redistribution rights was identified in the investigated sources).
+
 ## 0.5.0
 
 - **Pure-Dart JPEG Baseline Decompressor (`1.2.840.10008.1.2.4.50`)**:
