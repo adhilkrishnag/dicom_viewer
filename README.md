@@ -14,7 +14,7 @@ Experience the Flutter DICOM viewer directly in your web browser with interactiv
 
 👉 **[Open Live DICOM Viewer Demo](https://adhilkrishnag.github.io/dicom_viewer_demo/)**
 
-> **Privacy Note:** DICOM files are processed entirely locally in your browser memory and are never uploaded by the demo application.
+> **Privacy Note:** DICOM files are processed locally in your browser. During testing, no DICOM data was uploaded or transmitted by the demo application.
 
 ---
 

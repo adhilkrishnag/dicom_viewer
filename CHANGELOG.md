@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0 (Unreleased)
+## 0.6.0
 
 - **Real Uncompressed Multi-Frame Validation**:
   - Added and permanently validated real 10-frame uncompressed Explicit VR Little Endian MR clinical fixture (`emri_small.dcm`).
