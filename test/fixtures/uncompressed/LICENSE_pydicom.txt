@@ -1,6 +1,6 @@
-The DICOM test files in this directory (emri_small.dcm, color-pl.dcm) are sourced from the open-source pydicom repository (https://github.com/pydicom/pydicom-data).
+The DICOM test files in this directory (emri_small.dcm, color-pl.dcm, CR1_6154.dcm) are sourced from the open-source pydicom project (pydicom and pydicom-data, https://github.com/pydicom/pydicom).
 
-The fixtures are distributed within pydicom-data under the repository's MIT licensing terms, and no additional fixture-specific redistribution restriction was identified during the investigation.
+The fixtures are distributed within pydicom under the repository's MIT licensing terms. For CR1_6154.dcm, the underlying anonymized scan originates from the Patient Contributed Image Repository (pcir.org), released into the public domain by voluntary contributor consent, and downsized to 16x16 by pydicom maintainers for test suite distribution. No additional redistribution restrictions apply.
 
 License: MIT License
 
