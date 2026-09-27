@@ -8,6 +8,16 @@ A **pure-Dart, cross-platform DICOM viewer package for Flutter**. Parses uncompr
 
 ---
 
+## 🌐 Live Demo
+
+Experience the Flutter DICOM viewer directly in your web browser with interactive windowing, pan/zoom, measurement tools, and sample DICOM loading:
+
+👉 **[Open Live DICOM Viewer Demo](https://adhilkrishnag.github.io/dicom_viewer_demo/)**
+
+> **Privacy Note:** DICOM files are processed entirely locally in your browser memory and are never uploaded by the demo application.
+
+---
+
 ## ⚕️ Medical Use Disclaimer
 
 `dicom_viewer` is an open-source software library intended for image processing, visualization, and application development. It is not a certified or approved medical device and has not been evaluated or authorized by regulatory authorities for clinical diagnosis, treatment, or other patient-care decisions. It is not intended to replace the judgment of qualified healthcare professionals or to be used as the sole basis for clinical decision-making.
