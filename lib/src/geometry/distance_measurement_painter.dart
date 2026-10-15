@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'distance_measurement.dart';
 import 'image_coordinate_transform.dart';
@@ -8,30 +9,57 @@ import 'image_coordinate_transform.dart';
 class DistanceMeasurementPainter extends CustomPainter {
   /// Creates a [DistanceMeasurementPainter].
   const DistanceMeasurementPainter({
-    required this.measurement,
+    DicomDistanceMeasurement? measurement,
+    this.measurements = const [],
     required this.transform,
-  });
+  }) : _measurement = measurement;
+
+  final DicomDistanceMeasurement? _measurement;
 
   /// The active measurement to draw, or null if no measurement exists.
-  final DicomDistanceMeasurement? measurement;
+  ///
+  /// For backward compatibility with single-measurement callers, returns [_measurement]
+  /// or the last item in [measurements].
+  DicomDistanceMeasurement? get measurement =>
+      _measurement ?? (measurements.isNotEmpty ? measurements.last : null);
+
+  /// Multiple distance measurements to draw.
+  final List<DicomDistanceMeasurement> measurements;
+
+  /// Effective list of measurements to render.
+  List<DicomDistanceMeasurement> get effectiveMeasurements {
+    if (measurements.isNotEmpty) {
+      return measurements;
+    }
+    if (_measurement != null) {
+      return [_measurement];
+    }
+    return const [];
+  }
 
   /// The coordinate transform pipeline for mapping image points to viewport space.
   final ImageCoordinateTransform transform;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final m = measurement;
-    if (m == null) return;
+    final list = effectiveMeasurements;
+    if (list.isEmpty) return;
 
-    final startVp = transform.pixelToViewport(
-      Offset(m.start.pixelX, m.start.pixelY),
-    );
-    final endVp = transform.pixelToViewport(Offset(m.end.pixelX, m.end.pixelY));
+    for (final m in list) {
+      if (!m.isVisible) continue;
 
-    if (!m.isValid) {
-      _paintInvalidMeasurement(canvas, startVp, endVp, m);
-    } else {
-      _paintValidMeasurement(canvas, startVp, endVp, m);
+      final startVp = transform.pixelToViewport(
+        Offset(m.start.pixelX, m.start.pixelY),
+      );
+      final endVp = transform.pixelToViewport(
+        Offset(m.end.pixelX, m.end.pixelY),
+      );
+
+      if (!m.isValid) {
+        _paintInvalidMeasurement(canvas, startVp, endVp, m);
+      } else {
+        _paintValidMeasurement(canvas, startVp, endVp, m);
+      }
     }
   }
 
@@ -235,7 +263,8 @@ class DistanceMeasurementPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(DistanceMeasurementPainter oldDelegate) {
-    return oldDelegate.measurement != measurement ||
+    return !listEquals(oldDelegate.measurements, measurements) ||
+        oldDelegate.measurement != measurement ||
         oldDelegate.transform != transform;
   }
 }

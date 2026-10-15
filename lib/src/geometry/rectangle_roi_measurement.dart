@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 
 import 'dicom_image_geometry.dart';
+import 'dicom_measurement.dart';
 import 'dicom_roi_statistics_engine.dart';
 import 'image_coordinate_transform.dart';
 
@@ -46,13 +47,16 @@ import 'image_coordinate_transform.dart';
 ///
 /// When `startPoint == endPoint` (zero pixel area), [isValid] is `false`.
 ///
-/// ## Per-Frame Behavior
+/// ## Multi-Measurement Integration
 ///
-/// Each ROI belongs to a specific [frameIndex]. At most one ROI exists per frame.
-/// Frame changes hide/restore per-frame ROIs. Dataset changes clear all ROI state.
-class DicomRectangleRoiMeasurement {
+/// Implements [DicomMeasurement], exposing a stable [id], [type] ([DicomMeasurementType.rectangleRoi]),
+/// [frameIndex], normalized [geometry] ([Rect]), and independent [isVisible] / [isSelected] state.
+class DicomRectangleRoiMeasurement implements DicomMeasurement {
   /// Creates a [DicomRectangleRoiMeasurement].
-  const DicomRectangleRoiMeasurement({
+  ///
+  /// If [id] is omitted, a unique stable ID is generated automatically.
+  DicomRectangleRoiMeasurement({
+    String? id,
     required this.startPoint,
     required this.endPoint,
     required this.normalizedRect,
@@ -65,6 +69,27 @@ class DicomRectangleRoiMeasurement {
     required this.isValid,
     required this.frameIndex,
     this.statistics,
+    this.isVisible = true,
+    this.isSelected = false,
+  }) : id = id ?? DicomMeasurementIdGenerator.generate('roi');
+
+  /// Creates a [DicomRectangleRoiMeasurement] with an explicit, known [id].
+  const DicomRectangleRoiMeasurement.withExplicitId({
+    required this.id,
+    required this.startPoint,
+    required this.endPoint,
+    required this.normalizedRect,
+    required this.pixelWidth,
+    required this.pixelHeight,
+    required this.areaPx,
+    this.physicalWidthMm,
+    this.physicalHeightMm,
+    this.areaMm2,
+    required this.isValid,
+    required this.frameIndex,
+    this.statistics,
+    this.isVisible = true,
+    this.isSelected = false,
   });
 
   /// Computes a [DicomRectangleRoiMeasurement] from two continuous [ImagePoint]s
@@ -74,11 +99,14 @@ class DicomRectangleRoiMeasurement {
   /// The rectangle is normalized so that the top-left corner has the minimum
   /// coordinates regardless of drag direction.
   factory DicomRectangleRoiMeasurement.fromImagePoints({
+    String? id,
     required ImagePoint start,
     required ImagePoint end,
     required int frameIndex,
     required DicomImageGeometry geometry,
     DicomRoiStatistics? statistics,
+    bool isVisible = true,
+    bool isSelected = false,
   }) {
     // Normalize rectangle: ensure left <= right, top <= bottom
     final left = math.min(start.pixelX, end.pixelX);
@@ -112,6 +140,7 @@ class DicomRectangleRoiMeasurement {
     }
 
     return DicomRectangleRoiMeasurement(
+      id: id,
       startPoint: start,
       endPoint: end,
       normalizedRect: normalizedRect,
@@ -124,8 +153,30 @@ class DicomRectangleRoiMeasurement {
       isValid: isValid,
       frameIndex: frameIndex,
       statistics: statistics,
+      isVisible: isVisible,
+      isSelected: isSelected,
     );
   }
+
+  /// Stable unique identifier for this measurement.
+  @override
+  final String id;
+
+  /// The measurement type discriminator.
+  @override
+  DicomMeasurementType get type => DicomMeasurementType.rectangleRoi;
+
+  /// Normalized rectangle in continuous native pixel coordinates.
+  @override
+  Rect get geometry => normalizedRect;
+
+  /// Whether this measurement is visible on the image overlay.
+  @override
+  final bool isVisible;
+
+  /// Whether this measurement is currently selected.
+  @override
+  final bool isSelected;
 
   /// First corner in continuous native image coordinates.
   final ImagePoint startPoint;
@@ -160,30 +211,59 @@ class DicomRectangleRoiMeasurement {
   final double? areaMm2;
 
   /// Whether both corners are inside the image and the ROI has non-zero area.
+  @override
   final bool isValid;
 
   /// The multi-frame image index (0-indexed) this ROI belongs to.
+  @override
   final int frameIndex;
 
   /// Quantitative pixel statistics calculated for this ROI, or null if in-progress/uncalculated.
   final DicomRoiStatistics? statistics;
 
-  /// Creates a copy of this measurement with optionally updated [statistics].
-  DicomRectangleRoiMeasurement copyWith({DicomRoiStatistics? statistics}) {
-    return DicomRectangleRoiMeasurement(
-      startPoint: startPoint,
-      endPoint: endPoint,
-      normalizedRect: normalizedRect,
-      pixelWidth: pixelWidth,
-      pixelHeight: pixelHeight,
-      areaPx: areaPx,
-      physicalWidthMm: physicalWidthMm,
-      physicalHeightMm: physicalHeightMm,
-      areaMm2: areaMm2,
-      isValid: isValid,
-      frameIndex: frameIndex,
+  /// Creates a copy of this measurement with optionally updated fields.
+  DicomRectangleRoiMeasurement copyWith({
+    String? id,
+    ImagePoint? startPoint,
+    ImagePoint? endPoint,
+    Rect? normalizedRect,
+    double? pixelWidth,
+    double? pixelHeight,
+    double? areaPx,
+    double? physicalWidthMm,
+    double? physicalHeightMm,
+    double? areaMm2,
+    bool? isValid,
+    int? frameIndex,
+    DicomRoiStatistics? statistics,
+    bool? isVisible,
+    bool? isSelected,
+  }) {
+    return DicomRectangleRoiMeasurement.withExplicitId(
+      id: id ?? this.id,
+      startPoint: startPoint ?? this.startPoint,
+      endPoint: endPoint ?? this.endPoint,
+      normalizedRect: normalizedRect ?? this.normalizedRect,
+      pixelWidth: pixelWidth ?? this.pixelWidth,
+      pixelHeight: pixelHeight ?? this.pixelHeight,
+      areaPx: areaPx ?? this.areaPx,
+      physicalWidthMm: physicalWidthMm ?? this.physicalWidthMm,
+      physicalHeightMm: physicalHeightMm ?? this.physicalHeightMm,
+      areaMm2: areaMm2 ?? this.areaMm2,
+      isValid: isValid ?? this.isValid,
+      frameIndex: frameIndex ?? this.frameIndex,
       statistics: statistics ?? this.statistics,
+      isVisible: isVisible ?? this.isVisible,
+      isSelected: isSelected ?? this.isSelected,
     );
+  }
+
+  @override
+  DicomRectangleRoiMeasurement copyWithMeasurement({
+    bool? isVisible,
+    bool? isSelected,
+  }) {
+    return copyWith(isVisible: isVisible, isSelected: isSelected);
   }
 
   /// Whether physical millimeter measurements are available.
@@ -212,7 +292,11 @@ class DicomRectangleRoiMeasurement {
         'A: ${areaPx.toStringAsFixed(1)} px\u00B2';
   }
 
+  @override
+  String get formattedValue => formattedDimensions;
+
   /// Accessibility-friendly label for screen readers.
+  @override
   String get semanticsLabel {
     if (!isValid) return 'Rectangle ROI: Out of bounds';
     final geoStr =
@@ -237,6 +321,7 @@ class DicomRectangleRoiMeasurement {
       identical(this, other) ||
       other is DicomRectangleRoiMeasurement &&
           runtimeType == other.runtimeType &&
+          id == other.id &&
           startPoint == other.startPoint &&
           endPoint == other.endPoint &&
           normalizedRect == other.normalizedRect &&
@@ -248,10 +333,13 @@ class DicomRectangleRoiMeasurement {
           areaMm2 == other.areaMm2 &&
           isValid == other.isValid &&
           frameIndex == other.frameIndex &&
-          statistics == other.statistics;
+          statistics == other.statistics &&
+          isVisible == other.isVisible &&
+          isSelected == other.isSelected;
 
   @override
   int get hashCode =>
+      id.hashCode ^
       startPoint.hashCode ^
       endPoint.hashCode ^
       normalizedRect.hashCode ^
@@ -263,10 +351,13 @@ class DicomRectangleRoiMeasurement {
       areaMm2.hashCode ^
       isValid.hashCode ^
       frameIndex.hashCode ^
-      statistics.hashCode;
+      statistics.hashCode ^
+      isVisible.hashCode ^
+      isSelected.hashCode;
 
   @override
   String toString() =>
-      'DicomRectangleRoiMeasurement(frame: $frameIndex, rect: $normalizedRect, '
-      'dimensions: $formattedDimensions, stats: $statistics, isValid: $isValid)';
+      'DicomRectangleRoiMeasurement(id: $id, frame: $frameIndex, rect: $normalizedRect, '
+      'dimensions: $formattedDimensions, stats: $statistics, isValid: $isValid, '
+      'isVisible: $isVisible, isSelected: $isSelected)';
 }

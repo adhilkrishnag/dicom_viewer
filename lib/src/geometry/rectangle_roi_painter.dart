@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'image_coordinate_transform.dart';
 import 'rectangle_roi_measurement.dart';
@@ -12,62 +13,87 @@ import 'rectangle_roi_measurement.dart';
 class RectangleRoiPainter extends CustomPainter {
   /// Creates a [RectangleRoiPainter].
   const RectangleRoiPainter({
-    required this.measurement,
+    DicomRectangleRoiMeasurement? measurement,
+    this.measurements = const [],
     required this.transform,
-  });
+  }) : _measurement = measurement;
+
+  final DicomRectangleRoiMeasurement? _measurement;
 
   /// The active ROI measurement to draw, or null if no ROI exists.
-  final DicomRectangleRoiMeasurement? measurement;
+  ///
+  /// For backward compatibility with single-ROI callers, returns [_measurement]
+  /// or the last item in [measurements].
+  DicomRectangleRoiMeasurement? get measurement =>
+      _measurement ?? (measurements.isNotEmpty ? measurements.last : null);
+
+  /// Multiple ROI measurements to draw.
+  final List<DicomRectangleRoiMeasurement> measurements;
+
+  /// Effective list of measurements to render.
+  List<DicomRectangleRoiMeasurement> get effectiveMeasurements {
+    if (measurements.isNotEmpty) {
+      return measurements;
+    }
+    if (_measurement != null) {
+      return [_measurement];
+    }
+    return const [];
+  }
 
   /// The coordinate transform pipeline for mapping image points to viewport space.
   final ImageCoordinateTransform transform;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final m = measurement;
-    if (m == null) return;
+    final list = effectiveMeasurements;
+    if (list.isEmpty) return;
 
-    // Convert normalized rectangle corners from pixel space to viewport space
-    final topLeftVp = transform.pixelToViewport(
-      Offset(m.normalizedRect.left, m.normalizedRect.top),
-    );
-    final topRightVp = transform.pixelToViewport(
-      Offset(m.normalizedRect.right, m.normalizedRect.top),
-    );
-    final bottomLeftVp = transform.pixelToViewport(
-      Offset(m.normalizedRect.left, m.normalizedRect.bottom),
-    );
-    final bottomRightVp = transform.pixelToViewport(
-      Offset(m.normalizedRect.right, m.normalizedRect.bottom),
-    );
+    for (final m in list) {
+      if (!m.isVisible) continue;
 
-    final vpRect = Rect.fromLTRB(
-      topLeftVp.dx,
-      topLeftVp.dy,
-      bottomRightVp.dx,
-      bottomRightVp.dy,
-    );
-
-    if (!m.isValid) {
-      _paintInvalidRoi(
-        canvas,
-        vpRect,
-        topLeftVp,
-        topRightVp,
-        bottomLeftVp,
-        bottomRightVp,
-        m,
+      // Convert normalized rectangle corners from pixel space to viewport space
+      final topLeftVp = transform.pixelToViewport(
+        Offset(m.normalizedRect.left, m.normalizedRect.top),
       );
-    } else {
-      _paintValidRoi(
-        canvas,
-        vpRect,
-        topLeftVp,
-        topRightVp,
-        bottomLeftVp,
-        bottomRightVp,
-        m,
+      final topRightVp = transform.pixelToViewport(
+        Offset(m.normalizedRect.right, m.normalizedRect.top),
       );
+      final bottomLeftVp = transform.pixelToViewport(
+        Offset(m.normalizedRect.left, m.normalizedRect.bottom),
+      );
+      final bottomRightVp = transform.pixelToViewport(
+        Offset(m.normalizedRect.right, m.normalizedRect.bottom),
+      );
+
+      final vpRect = Rect.fromLTRB(
+        topLeftVp.dx,
+        topLeftVp.dy,
+        bottomRightVp.dx,
+        bottomRightVp.dy,
+      );
+
+      if (!m.isValid) {
+        _paintInvalidRoi(
+          canvas,
+          vpRect,
+          topLeftVp,
+          topRightVp,
+          bottomLeftVp,
+          bottomRightVp,
+          m,
+        );
+      } else {
+        _paintValidRoi(
+          canvas,
+          vpRect,
+          topLeftVp,
+          topRightVp,
+          bottomLeftVp,
+          bottomRightVp,
+          m,
+        );
+      }
     }
   }
 
@@ -262,7 +288,8 @@ class RectangleRoiPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(RectangleRoiPainter oldDelegate) {
-    return oldDelegate.measurement != measurement ||
+    return !listEquals(oldDelegate.measurements, measurements) ||
+        oldDelegate.measurement != measurement ||
         oldDelegate.transform != transform;
   }
 }

@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../geometry/dicom_image_geometry.dart';
+import '../geometry/dicom_measurement.dart';
 import '../geometry/dicom_probe_painter.dart';
 import '../geometry/dicom_roi_statistics_engine.dart';
 import '../geometry/distance_measurement.dart';
@@ -81,12 +82,13 @@ class DicomImageWidget extends StatefulWidget {
   final void Function(double scale, Offset offset)? onViewChanged;
 
   @override
-  State<DicomImageWidget> createState() => _DicomImageWidgetState();
+  State<DicomImageWidget> createState() => DicomImageWidgetState();
 }
 
 enum _MeasurementEndpoint { start, end }
 
-class _DicomImageWidgetState extends State<DicomImageWidget> {
+/// State class for [DicomImageWidget].
+class DicomImageWidgetState extends State<DicomImageWidget> {
   late double _windowCenter;
   late double _windowWidth;
   ui.Image? _renderedImage;
@@ -99,11 +101,14 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
 
   late TransformationController _transformationController;
 
-  /// Stored completed distance measurements per frame index.
-  final Map<int, DicomDistanceMeasurement> _measurements = {};
+  /// Stored completed measurements (caliper distances, rectangle ROIs, etc.) per frame index.
+  final Map<int, List<DicomMeasurement>> _frameMeasurements = {};
 
   /// In-progress distance measurement currently being dragged on the active frame.
   DicomDistanceMeasurement? _inProgressMeasurement;
+
+  /// Stable ID of the distance measurement currently being edited at one endpoint, or null if creating new.
+  String? _editingMeasurementId;
 
   /// Viewport position where the initial pointer down was received.
   Offset? _measureDragDownViewport;
@@ -116,9 +121,6 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
 
   /// Which endpoint is currently being adjusted, or null if creating a new measurement.
   _MeasurementEndpoint? _measureDragEditingEndpoint;
-
-  /// Stored completed rectangle ROI measurements per frame index.
-  final Map<int, DicomRectangleRoiMeasurement> _roiMeasurements = {};
 
   /// In-progress rectangle ROI currently being dragged on the active frame.
   DicomRectangleRoiMeasurement? _inProgressRoi;
@@ -153,13 +155,13 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     if (oldWidget.dataset != widget.dataset) {
       _initWindowing();
       _transformationController.value = Matrix4.identity();
-      _measurements.clear();
+      _frameMeasurements.clear();
       _inProgressMeasurement = null;
+      _editingMeasurementId = null;
       _measureDragDownViewport = null;
       _measureDragStartViewport = null;
       _measureDragFixedAnchor = null;
       _measureDragEditingEndpoint = null;
-      _roiMeasurements.clear();
       _inProgressRoi = null;
       _roiDragDownViewport = null;
       _roiDragStartViewport = null;
@@ -169,6 +171,7 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
       _renderImage();
     } else if (oldWidget.frameIndex != widget.frameIndex) {
       _inProgressMeasurement = null;
+      _editingMeasurementId = null;
       _measureDragDownViewport = null;
       _measureDragStartViewport = null;
       _measureDragFixedAnchor = null;
@@ -315,19 +318,25 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     ImageCoordinateTransform transform,
   ) {
     final downPos = _measureDragDownViewport ?? details.localPosition;
-    final existing = _measurements[widget.frameIndex];
-    if (existing != null && existing.isValid) {
+    final frameDistances =
+        (_frameMeasurements[widget.frameIndex] ?? const [])
+            .whereType<DicomDistanceMeasurement>()
+            .toList();
+
+    const hitRadius = 24.0;
+    for (final existing in frameDistances.reversed) {
+      if (!existing.isValid || !existing.isVisible) continue;
       final startVp = transform.pixelToViewport(
         Offset(existing.start.pixelX, existing.start.pixelY),
       );
       final endVp = transform.pixelToViewport(
         Offset(existing.end.pixelX, existing.end.pixelY),
       );
-      const hitRadius = 24.0;
       final distToStart = (downPos - startVp).distance;
       final distToEnd = (downPos - endVp).distance;
 
       if (distToStart <= hitRadius && distToStart <= distToEnd) {
+        _editingMeasurementId = existing.id;
         _measureDragEditingEndpoint = _MeasurementEndpoint.start;
         _measureDragFixedAnchor = existing.end;
         _measureDragStartViewport = null;
@@ -338,12 +347,16 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
         );
         setState(() {
           _inProgressMeasurement = DicomDistanceMeasurement.fromResult(
+            id: existing.id,
             result: result,
             frameIndex: widget.frameIndex,
+            isVisible: existing.isVisible,
+            isSelected: existing.isSelected,
           );
         });
         return;
       } else if (distToEnd <= hitRadius) {
+        _editingMeasurementId = existing.id;
         _measureDragEditingEndpoint = _MeasurementEndpoint.end;
         _measureDragFixedAnchor = existing.start;
         _measureDragStartViewport = null;
@@ -354,14 +367,18 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
         );
         setState(() {
           _inProgressMeasurement = DicomDistanceMeasurement.fromResult(
+            id: existing.id,
             result: result,
             frameIndex: widget.frameIndex,
+            isVisible: existing.isVisible,
+            isSelected: existing.isSelected,
           );
         });
         return;
       }
     }
 
+    _editingMeasurementId = null;
     _measureDragEditingEndpoint = null;
     _measureDragFixedAnchor = null;
     _measureDragStartViewport = downPos;
@@ -392,8 +409,11 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
       );
       setState(() {
         _inProgressMeasurement = DicomDistanceMeasurement.fromResult(
+          id: _editingMeasurementId,
           result: result,
           frameIndex: widget.frameIndex,
+          isVisible: _inProgressMeasurement?.isVisible ?? true,
+          isSelected: _inProgressMeasurement?.isSelected ?? false,
         );
       });
     } else if (_measureDragEditingEndpoint == _MeasurementEndpoint.end) {
@@ -404,8 +424,11 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
       );
       setState(() {
         _inProgressMeasurement = DicomDistanceMeasurement.fromResult(
+          id: _editingMeasurementId,
           result: result,
           frameIndex: widget.frameIndex,
+          isVisible: _inProgressMeasurement?.isVisible ?? true,
+          isSelected: _inProgressMeasurement?.isSelected ?? false,
         );
       });
     } else if (_measureDragStartViewport != null) {
@@ -429,10 +452,24 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     ImageCoordinateTransform transform,
   ) {
     if (_inProgressMeasurement != null && _inProgressMeasurement!.isValid) {
-      _measurements[widget.frameIndex] = _inProgressMeasurement!;
+      final frameList = _frameMeasurements.putIfAbsent(
+        widget.frameIndex,
+        () => [],
+      );
+      if (_editingMeasurementId != null) {
+        final idx = frameList.indexWhere((m) => m.id == _editingMeasurementId);
+        if (idx != -1) {
+          frameList[idx] = _inProgressMeasurement!;
+        } else {
+          frameList.add(_inProgressMeasurement!);
+        }
+      } else {
+        frameList.add(_inProgressMeasurement!);
+      }
     }
     setState(() {
       _inProgressMeasurement = null;
+      _editingMeasurementId = null;
       _measureDragDownViewport = null;
       _measureDragStartViewport = null;
       _measureDragFixedAnchor = null;
@@ -443,6 +480,7 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
   void _onMeasurePanCancel() {
     setState(() {
       _inProgressMeasurement = null;
+      _editingMeasurementId = null;
       _measureDragDownViewport = null;
       _measureDragStartViewport = null;
       _measureDragFixedAnchor = null;
@@ -504,7 +542,9 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
         frameIndex: widget.frameIndex,
       );
       final completedRoi = _inProgressRoi!.copyWith(statistics: stats);
-      _roiMeasurements[widget.frameIndex] = completedRoi;
+      _frameMeasurements
+          .putIfAbsent(widget.frameIndex, () => [])
+          .add(completedRoi);
     }
     setState(() {
       _inProgressRoi = null;
@@ -521,12 +561,14 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
     });
   }
 
+  /// Resets windowing (contrast/brightness) to initial default values.
   void resetWindowing() {
     if (_isMonochrome) {
       setState(() {
         _initWindowing();
         _transformationController.value = Matrix4.identity();
         _inProgressMeasurement = null;
+        _editingMeasurementId = null;
         _measureDragStartViewport = null;
         _measureDragFixedAnchor = null;
         _measureDragEditingEndpoint = null;
@@ -539,6 +581,7 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
       setState(() {
         _transformationController.value = Matrix4.identity();
         _inProgressMeasurement = null;
+        _editingMeasurementId = null;
         _measureDragStartViewport = null;
         _measureDragFixedAnchor = null;
         _measureDragEditingEndpoint = null;
@@ -651,9 +694,24 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
               widget.enableZoom ? _transformationController.value : null,
         );
 
-        final activeMeasurement =
-            _inProgressMeasurement ?? _measurements[widget.frameIndex];
-        final activeRoi = _inProgressRoi ?? _roiMeasurements[widget.frameIndex];
+        final frameMeasurements =
+            _frameMeasurements[widget.frameIndex] ?? const [];
+        final frameDistances =
+            frameMeasurements.whereType<DicomDistanceMeasurement>().toList();
+        final frameRois =
+            frameMeasurements
+                .whereType<DicomRectangleRoiMeasurement>()
+                .toList();
+
+        final effectiveDistances = [
+          ...frameDistances.where((d) => d.id != _editingMeasurementId),
+          if (_inProgressMeasurement != null) _inProgressMeasurement!,
+        ];
+
+        final effectiveRois = [
+          ...frameRois,
+          if (_inProgressRoi != null) _inProgressRoi!,
+        ];
 
         Widget imageContent = Center(
           child:
@@ -757,16 +815,17 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
                 Positioned.fill(
                   child: Semantics(
                     label:
-                        activeMeasurement != null && activeMeasurement.isValid
-                            ? (activeMeasurement.hasPhysicalMeasurement
-                                ? 'Distance measurement: ${activeMeasurement.physicalDistanceMm!.toStringAsFixed(1)} millimeters'
-                                : 'Distance measurement: ${activeMeasurement.pixelDistance.toStringAsFixed(1)} pixels')
+                        effectiveDistances.isNotEmpty
+                            ? effectiveDistances
+                                .where((m) => m.isVisible && m.isValid)
+                                .map((m) => m.semanticsLabel)
+                                .join('\n')
                             : null,
                     child: IgnorePointer(
                       child: CustomPaint(
                         size: viewportSize,
                         painter: DistanceMeasurementPainter(
-                          measurement: activeMeasurement,
+                          measurements: effectiveDistances,
                           transform: transform,
                         ),
                       ),
@@ -779,14 +838,17 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
                 Positioned.fill(
                   child: Semantics(
                     label:
-                        activeRoi != null && activeRoi.isValid
-                            ? activeRoi.semanticsLabel
+                        effectiveRois.isNotEmpty
+                            ? effectiveRois
+                                .where((m) => m.isVisible && m.isValid)
+                                .map((m) => m.semanticsLabel)
+                                .join('\n')
                             : null,
                     child: IgnorePointer(
                       child: CustomPaint(
                         size: viewportSize,
                         painter: RectangleRoiPainter(
-                          measurement: activeRoi,
+                          measurements: effectiveRois,
                           transform: transform,
                         ),
                       ),
@@ -971,5 +1033,114 @@ class _DicomImageWidgetState extends State<DicomImageWidget> {
         );
       },
     );
+  }
+
+  // =========================================================================
+  // Measurement Model Primitives
+  // =========================================================================
+
+  /// Returns an unmodifiable list of measurements for the specified [frameIndex],
+  /// or for all frames if [frameIndex] is null.
+  List<DicomMeasurement> getMeasurements([int? frameIndex]) {
+    if (frameIndex != null) {
+      return List.unmodifiable(_frameMeasurements[frameIndex] ?? const []);
+    }
+    final all = <DicomMeasurement>[];
+    for (final list in _frameMeasurements.values) {
+      all.addAll(list);
+    }
+    return List.unmodifiable(all);
+  }
+
+  /// Returns measurements of specific type [T] for the specified [frameIndex],
+  /// or across all frames if [frameIndex] is null.
+  List<T> getMeasurementsOfType<T extends DicomMeasurement>([int? frameIndex]) {
+    return getMeasurements(frameIndex).whereType<T>().toList();
+  }
+
+  /// Finds the measurement with [id], or null if not found.
+  DicomMeasurement? getMeasurementById(String id) {
+    for (final list in _frameMeasurements.values) {
+      for (final m in list) {
+        if (m.id == id) return m;
+      }
+    }
+    return null;
+  }
+
+  /// Adds a [measurement] to its associated frame.
+  void addMeasurement(DicomMeasurement measurement) {
+    setState(() {
+      _frameMeasurements
+          .putIfAbsent(measurement.frameIndex, () => [])
+          .add(measurement);
+    });
+  }
+
+  /// Removes the measurement with [id] across all frames.
+  ///
+  /// Returns `true` if a measurement was found and removed, `false` otherwise.
+  bool removeMeasurement(String id) {
+    bool removed = false;
+    setState(() {
+      for (final list in _frameMeasurements.values) {
+        final index = list.indexWhere((m) => m.id == id);
+        if (index != -1) {
+          list.removeAt(index);
+          removed = true;
+          break;
+        }
+      }
+    });
+    return removed;
+  }
+
+  /// Sets the [isVisible] state for the measurement with [id].
+  ///
+  /// Returns `true` if found and updated, `false` otherwise.
+  bool setMeasurementVisibility(String id, bool isVisible) {
+    bool updated = false;
+    setState(() {
+      for (final entry in _frameMeasurements.entries) {
+        final list = entry.value;
+        final index = list.indexWhere((m) => m.id == id);
+        if (index != -1) {
+          list[index] = list[index].copyWithMeasurement(isVisible: isVisible);
+          updated = true;
+          break;
+        }
+      }
+    });
+    return updated;
+  }
+
+  /// Sets the [isSelected] state for the measurement with [id].
+  ///
+  /// Returns `true` if found and updated, `false` otherwise.
+  bool setMeasurementSelected(String id, bool isSelected) {
+    bool updated = false;
+    setState(() {
+      for (final entry in _frameMeasurements.entries) {
+        final list = entry.value;
+        final index = list.indexWhere((m) => m.id == id);
+        if (index != -1) {
+          list[index] = list[index].copyWithMeasurement(isSelected: isSelected);
+          updated = true;
+          break;
+        }
+      }
+    });
+    return updated;
+  }
+
+  /// Clears all measurements on [frameIndex], or across all frames if [frameIndex] is null.
+  void clearMeasurements([int? frameIndex]) {
+    setState(() {
+      if (frameIndex != null) {
+        _frameMeasurements.remove(frameIndex);
+      } else {
+        _frameMeasurements.clear();
+      }
+    });
   }
 }
